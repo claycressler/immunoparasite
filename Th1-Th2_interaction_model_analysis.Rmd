@@ -429,14 +429,17 @@ eq5 <- findEquilibrium(derivs, y0=c(0.1,0.4), parameters=params, system="two.dim
 eq6 <- findEquilibrium(derivs, y0=c(0.4,0.1), parameters=params, system="two.dim", plot.it=TRUE, summary=FALSE)
 ```
 
-Let's consider this model for the immune dynamics, then:
+### Stochastic simulations
+What I'm going to do now is a stochastic simulation where the parasite abundance grows logistically, with no effect on it by the immune response, just to observe the dynamics of the Th1 and Th2 response.
+The dynamics of two immune populations are given by
 \begin{equation}
-\frac{dT_i}{dt} = b_i + c_i P + \frac{s_i T_i^2}{S_i^2 + T_i^2}\frac{I_{ij}}{I_{ij}+T_j} - m T_i.
+\frac{dT_i}{dt} = b1 + c1 P + \frac{s_i T_i^2}{S_i^2 + T_i^2}\frac{I_{ij}}{I_{ij}+T_j} - m T_i.
 \end{equation}
-We can compare what the configurations of the isoclines look like for different values of $b_i$, $c_i$, and $P$ to see how parasite dynamics will shape the trajectories through the phase plane.
-When parasites are absent $P=0$, there should only be one stable equilibrium (the resting state; Fig. \@ref(fig:P0clines)).
-
-```{r P0clines, echo=FALSE, fig.height=6, fig.width=8, fig.cap="Null clines and equilibria when the parasite is at its initial value and the parameters are (S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, P=0)."}
+As the parasite population grows, the configuration of the $T_1$ and $T_2$ isoclines changes.
+By plotting both the changing isocline configuration and the Th1/Th2 trajectory, I can get a lovely visual of how the parasite population growth warps the flow field through the phase plane, and how that warping affects the dynamics of Th1/Th2 response.
+In this first simulation, I will assume that the parasite stimulates both immune responses equally well, and that in the absence of infection ($P=0$), the only stable equilibrium is the low co-activation equilibrium.
+The movie shows the dynamics.
+```{r}
 derivs = function(t, y, params) {
   s1 <- params["s1"]
   s2 <- params["s2"]
@@ -460,40 +463,6 @@ derivs = function(t, y, params) {
   list(c(dT1, dT2))
 }
 
-library(animation)
-if(!file.exists("movie1.mp4"))
-  saveVideo({ 
-    ani.options(interval=0.1)
-    for (i in seq(0,250,10)) {
-      params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, P=i)
-      
-      flows <- flowField(derivs, 
-                         xlim=c(0,2000),
-                         ylim=c(0,2000),
-                         parameters=params,
-                         system="two.dim",
-                         state.names=c("Th1","Th2"),
-                         add=FALSE)
-      clines <- nullclines(derivs, 
-                           xlim=c(0,2000),
-                           ylim=c(0,2000),
-                           parameters=params,
-                           col=c(1,2),
-                           lwd=2,
-                           state.names=c("Th1","Th2"))
-    }}, video.name="movie1.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
-
-
-```
-<video width="320" height="240" controls>
-  <source src="movie1.mp4" type="video/mp4">
-</video>
-
-### Stochastic simulations
-What I'm going to do now is a stochastic simulation where the parasite abundance grows logistically, with no effect on it by the immune response, just to observe the dynamics.
-When the parasite reaches its equilibrium, the phase plane and isoclines are exactly as they are shown in Fig. \@ref(fig:Pclines1), so the question I am asking here is whether stochastic variation is enough to tip the system towards a polarized response on its way towards the co-stimulation equilibrium.
-In this first simulation, I will assume that the parasite stimulates both immune responses equally well, and that the system starts in a state where the only stable equilibrium is the low co-activation equilibrium.
-```{r Pdyn, eval=FALSE, fig.height=6, fig.width=8, fig.cap="Fifty replicate stochastic trajectories of Th1 and Th2 responses as a parasite population grows towards carrying capacity, assuming no effect of the immune response on parasite growth, that the parasite stimulates both Th1 and Th2 equally well, and that the immune response starts out balanced."}
 gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   if (!is.null(seed))
     set.seed(seed)
@@ -510,10 +479,10 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   c2 <- params["c2"]
   bp <- params["bp"]
   Kp <- params["Kp"]
-  P <- params["P"]
   
   T1 <- y0[1]
   T2 <- y0[2]
+  P <- y0[3]
   
   t <- 0
   
@@ -525,8 +494,8 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
  
   while (t < tmax) {
     ## compute event rates
-    prod1 <- b1 + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) + c1*P
-    prod2 <- b2 + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) + c2*P
+    prod1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) 
+    prod2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1)
     death1 <- m*T1
     death2 <- m*T2
     birthP <- bp*P*(1-P/Kp)
@@ -569,62 +538,97 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   out <- out[1:(i-1),]
   return(out)
 }
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, P=10, bp=1, Kp=200)
+
 
 library(magrittr)
+set.seed(1234)
 seeds <- runif(50, 1, 1000) %>% floor
 
-lapply(seeds,
-       function(s) gillespie_sim(50, y0=c(5, 5), params=params, seed=s)
-) -> sims
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=0.2, Kp=200)
+out <- gillespie_sim(60, y0=c(5, 5, 10), params=params, seed=seeds[1])
 
-par(mfrow=c(1,2), mar=c(3,3,0,0), oma=rep(0.5,4))
-plot.new()
-plot.window(xlim=c(0,100), ylim=c(0,400))
-axis(1); axis(2); box('plot')
-for (i in 1:length(seeds))
-  lines(sims[[i]][,1], sims[[i]][,2], col=gray(0.4))
-mtext(side=1, line=2, "Time")
-mtext(side=2, line=2, "Th1 response")
+## Plot the isoclines and the Th1/Th2 trajectory as the parasite population grows
+## What I want to do is create a series of plots (which will be turned into movies) that shows the Th1/Th2 balance and the isocline configuration every time P crosses a threshold (e.g., every 1 new parasite)
+inds <- sapply(seq(10,199,1), function(p) min(which(out[,"P"] > p)))
 
-plot.new()
-plot.window(xlim=c(0,100), ylim=c(0,400))
-axis(1); axis(2); box('plot')
-for (i in 1:length(seeds))
-  lines(sims[[i]][,1], sims[[i]][,3], col=gray(0.4))
-mtext(side=1, line=2, "Time")
-mtext(side=2, line=2, "Th2 response")
+library(animation)
+if(!file.exists("movie2.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    for (i in inds) {
+      #print(i)
+      params2 <- c(params, out[i,"P"])
+      flows <- flowField(derivs, 
+                         xlim=c(0,2000),
+                         ylim=c(0,2000),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th1","Th2"),
+                         add=FALSE)
+      clines <- nullclines(derivs, 
+                           xlim=c(0,2000),
+                           ylim=c(0,2000),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th1","Th2"))
+      lines(out[1:i,2:3],lwd=2, col="orange")
+    }}, video.name="movie2.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
 
 ```
 
 
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie2.mp4" type="video/mp4">
+</video>
 
-```{r Pdyn2, eval=FALSE, fig.height=6, fig.width=8, fig.cap="Fifty replicate stochastic trajectories of Th1 and Th2 responses as a parasite population grows towards carrying capacity, assuming no effect of the immune response on parasite growth and that the parasite stimulates both Th1 and Th2 equally well, but that the immune response starts out biased towards Th1"}
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, P=10, bp=1, Kp=200)
+You can see that the parasite growth moves faster than the immune dynamics, so the isocline configuration changes faster than the immune response can keep up with it. 
+Because of the fact that the immune dynamics are always relatively slow, there is no opportunity for anything to happen except that the immune dynamics chase a stable co-expression equilibrium as it moves.
+Presumably, if the parasite growth was a bit slower (or if the immune response reacted a bit faster), there might be an opportunity for the immune dynamics to cross into the basin of attraction for a polarized response.
+In this first model, I will try slowing the parasite growth down by reducing the value of $b_p$ (from 0.2 to 0.02).
+
+```{r}
+library(magrittr)
+set.seed(1234)
 seeds <- runif(50, 1, 1000) %>% floor
 
-if(!file.exists("gillespieSims1.RDS")) {
-  lapply(seeds,
-         function(s) gillespie_sim(100, y0=c(9, 1), params=params, seed=s)
-  ) -> sims
-  saveRDS(sims, "gillespieSims1.RDS")
-} else sims <- readRDS("gillespieSims1.RDS")
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=0.02, Kp=200)
+out <- gillespie_sim(500, y0=c(5, 5, 10), params=params, seed=seeds[1])
 
-par(mfrow=c(1,2), mar=c(3,3,0,0), oma=rep(0.5,4))
-plot.new()
-plot.window(xlim=c(0,100), ylim=c(0,1500))
-axis(1); axis(2); box('plot')
-for (i in 1:length(seeds))
-  lines(sims[[i]][,1], sims[[i]][,2], col=gray(0.4))
-mtext(side=1, line=2, "Time")
-mtext(side=2, line=2, "Th1 response")
+## Plot the isoclines and the Th1/Th2 trajectory as the parasite population grows
+## What I want to do is create a series of plots (which will be turned into movies) that shows the Th1/Th2 balance and the isocline configuration every time P crosses a threshold (e.g., every 1 new parasite)
+inds <- sapply(seq(10,199,1), function(p) min(which(out[,"P"] > p)))
 
-plot.new()
-plot.window(xlim=c(0,100), ylim=c(0,1500))
-axis(1); axis(2); box('plot')
-for (i in 1:length(seeds))
-  lines(sims[[i]][,1], sims[[i]][,3], col=gray(0.4))
-mtext(side=1, line=2, "Time")
-mtext(side=2, line=2, "Th2 response")
+library(animation)
+if(!file.exists("movie3.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    for (i in inds) {
+      #print(i)
+      params2 <- c(params, out[i,"P"])
+      flows <- flowField(derivs, 
+                         xlim=c(0,2000),
+                         ylim=c(0,2000),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th1","Th2"),
+                         add=FALSE)
+      clines <- nullclines(derivs, 
+                           xlim=c(0,2000),
+                           ylim=c(0,2000),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th1","Th2"))
+      lines(out[1:i,2:3],lwd=2, col="orange")
+    }}, video.name="movie3.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
+
+```
+
+
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie3.mp4" type="video/mp4">
+</video>
+
 
 ```
