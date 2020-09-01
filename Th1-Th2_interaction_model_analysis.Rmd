@@ -487,9 +487,10 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   t <- 0
   
   ## set up storage for everything
-  out <- array(0, dim=c(1e5, 4))
+  out <- array(0, dim=c(1e6, 4))
   colnames(out) <- c("Time", "Th1", "Th2", "P")
   out[1,] <- c(t, T1, T2, P)
+  print(out[1,])
   i <- 2
  
   while (t < tmax) {
@@ -531,14 +532,15 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
       P <- P+1
     
     out[i,] <- c(t, T1, T2, P)
+    
     i <- i + 1
+    #print(out[i,])
     if (i > nrow(out)) ## add more rows
-      out <- rbind(out, array(0, dim=c(1e5, 4)))
+      out <- rbind(out, array(0, dim=c(1e6, 4)))
   }
   out <- out[1:(i-1),]
   return(out)
 }
-
 
 library(magrittr)
 set.seed(1234)
@@ -625,10 +627,54 @@ if(!file.exists("movie3.mp4"))
 
 ```
 
+You can see that this does create a situation where the immune dynamics become increasingly polarized for a time, but as the parasite population continues to grow, eventually the only stable equilibrium is that of high co-expression.
+If the parasite carrying capacity was a bit lower, or more realistically, if the parasite was affected by the immune response, then polarization could potentially occur.
 
 <video width="720" height="720" controls>
 <source src="/Users/ccressler2/immunoparasite/movie3.mp4" type="video/mp4">
 </video>
 
+For a first pass at this, I am just lowering the carrying capacity from $K_p = 200$ to $K_p = 120$, where multistability is still possible.
+
+```{r}
+library(magrittr)
+set.seed(1234)
+seeds <- runif(50, 1, 1000) %>% floor
+
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=0.3, Kp=120)
+out <- gillespie_sim(30, y0=c(5, 5, 10), params=params, seed=seeds[1])
+
+## Plot the isoclines and the Th1/Th2 trajectory as the parasite population grows
+## What I want to do is create a series of plots (which will be turned into movies) that shows the Th1/Th2 balance and the isocline configuration every time P crosses a threshold (e.g., every 1 new parasite)
+inds <- sapply(seq(10,max(out[,"P"]),1), function(p) min(which(out[,"P"] > p)))
+
+library(animation)
+if(!file.exists("movie4.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    for (i in inds) {
+      #print(i)
+      params2 <- c(params, out[i,"P"])
+      flows <- flowField(derivs, 
+                         xlim=c(0,2000),
+                         ylim=c(0,2000),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th1","Th2"),
+                         add=FALSE)
+      clines <- nullclines(derivs, 
+                           xlim=c(0,2000),
+                           ylim=c(0,2000),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th1","Th2"))
+      lines(out[1:i,2:3],lwd=2, col="orange")
+    }}, video.name="movie4.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
 
 ```
+
+
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie4.mp4" type="video/mp4">
+</video>
