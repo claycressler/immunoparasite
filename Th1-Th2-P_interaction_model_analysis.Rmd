@@ -1,0 +1,612 @@
+---
+title: "Modeling immune-parasite interactions"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      dev=c('png','tiff'),
+                      fig.path='figures/')
+```
+
+## Model of Th1-Th2-P interactions
+
+Let's consider a model with a dynamic parasite population that both grows logistically and suffers mortality (or loss of biomass) due to immune response (but only one cell-type).
+
+\begin{align}
+\frac{dT_i}{dt} &= b_i + c_i P + \frac{s_i T_i^2}{S_i^2 + T_i^2}\frac{I_{ij}}{I_{ij}+T_j} - m T_i, \\
+\frac{dP}{dt} &= b_P P \left(1-\frac{P}{K_P}\right) - a T_2
+\end{align}
+
+```{r, echo=FALSE}
+
+full_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+  P <- y[3]
+  
+  dT1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2#*P
+  
+  list(c(dT1, dT2, dP))
+}
+
+cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  P <- params["P"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+
+  dT1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+
+  list(c(dT1, dT2))
+}
+
+
+library(deSolve)
+library(phaseR, quietly=TRUE)
+library(magrittr)
+
+## Here is the dynamical outcome for a perfectly balanced immune induction
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=4, Kp=150, a=0.1)
+out <- ode(y=c(Th1=5,Th2=5,P=10), times=seq(0,200,1), func=full_model, parms=params) %>% as.data.frame
+
+library(animation)
+if(!file.exists("movie5.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    for (i in 1:120) {
+      #print(i)
+      params2 <- c(params, P=out[i,"P"])
+      flows <- flowField(derivs, 
+                         xlim=c(0,2000),
+                         ylim=c(0,2000),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th1","Th2"),
+                         add=FALSE)
+      clines <- nullclines(derivs, 
+                           xlim=c(0,2000),
+                           ylim=c(0,2000),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th1","Th2"))
+      lines(out[1:i,2:3],lwd=2, col="orange")
+    }}, video.name="movie5.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
+
+
+```
+
+It is a bit easier to see what is going on in these models if we simulate the deterministic system first.
+You can see that the dynamics slow down as the system approaches the unstable equilibrium that is created when the isoclines first intersect and new equilibra are created and exchange stability; in the theoretical ecology literature, this is often called a 'crawl-by' of the unstable equilibrium, and then the system runs toward the stable co-expression equilibrium.
+
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie5.mp4" type="video/mp4">
+</video>
+
+However, there is an issue with the above model. 
+To see what it is, note the dynamics of the parasite again:
+\begin{equation}
+\frac{dP}{dt} = b_P P \left(1-\frac{P}{K_P}\right) - a T_2
+\end{equation}
+I have used a formulation here where the mortality rate of the parasite is actually independent of the parasite density.
+The implication of this is that, if the parasite is driven extinct by the immune response, the growth rate is not zero, but rather is negative, leading the system to blow up in an unfortunate way.
+You can see that in a simulation where I make the immune induction by the parasite imbalanced, so that the parasite provokes a stronger Th2 immune response than Th1 (Fig. \@ref(fig:imbalancedImmune)).
+
+```{r imbalancedImmune, fig.width=6, fig.height=6, fig.cap="If the parasite's mortality rate is -a*T_2, and the parasite provokes a stronger Th2 immune response, it will be driven extinct and the parasite growth rate will continue to be negative, leading the system to take on negative abundances of parasites and immune cells."}
+## Here is the dynamical outcome for a perfectly balanced immune induction
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=2, bp=4, Kp=150, a=0.1)
+out <- ode(y=c(Th1=5,Th2=5,P=10), times=seq(0,200,0.1), func=full_model, parms=params) %>% as.data.frame
+
+par(mfrow=c(1,3), mar=c(4,4,0,0), oma=rep(0.5,4))
+with(out[-(175:177),], plot(time, P, type='l'))
+with(out[-(175:177),], plot(time, Th1, type='l'))
+with(out[-(175:177),], plot(time, Th2, type='l'))
+```
+
+We need to modify the parasite dynamics model to the following:
+\begin{equation}
+\frac{dP}{dt} = b_P P \left(1-\frac{P}{K_P}\right) - a T_2 P
+\end{equation}
+
+To get some sense of this model's potential dynamics, it's actually quite useful to do some additional playing around with isocline analyses.
+However, in this case, I'm going to look at the isoclines for $P$ and $T_2$, treating $T_1$ as a constant. 
+This gives some sense of what's possible, in terms of the outcomes of the relevant immunoparasite dynamics.
+The $T_2$ isocline, given by $dP/dt=0$, is the line
+\begin{equation}
+T_2 = \frac{b_P (K_P-P)}{a K_P},
+\end{equation}
+with intercepts at $(T_2=b_P/a, P=0)$ and $(T_2=0, P=K_P)$.
+There are two $P$ isoclines. 
+One is given by $dT_2/dt = 0$, and is a cubic function; the other is the line $P=0$.
+You can see a sample configuration for a balanced immune response in Fig. \@ref(fig:T2Pisoclines).
+Here there are four intersections between the three nullclines, corresponding to two stable equilibria (a high parasite, low Th2 equilibrium and a low parasite, high Th2 equilibrium), and two unstable equilibria (the equilibrium corresponding to zero parasites and "naive" immune response and an intermediate equilibrium).
+
+```{r T2Pisoclines, fig.height=6, fig.width=6, fig.cap="Isoclines for T2 and P, assuming T1=200."}
+## Here is the dynamical outcome for a perfectly balanced immune induction
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=4, Kp=150, a=0.1)
+out <- ode(y=c(Th1=5,Th2=5,P=10), times=seq(0,200,1), func=full_model, parms=params) %>% as.data.frame
+
+full_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+  P <- y[3]
+  
+  dT1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT1, dT2, dP))
+}
+
+T2P_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  T1 <- params["T1"]
+  
+  T2 <- y[1]
+  P <- y[2]
+
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT2, dP))
+}
+
+T1T2_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  P <- params["P"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+
+  dT1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+
+  list(c(dT1, dT2))
+}
+
+library(deSolve)
+library(phaseR, quietly=TRUE)
+
+## Three intersections, implying two stable equilibria
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=4, Kp=150, a=0.002)
+#for (T1 in c(200, 600, 900, 1100)) {
+  params2 <- c(params, T1=200)
+  flows <- flowField(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,200),
+                     parameters=params2,
+                     system="two.dim",
+                     state.names=c("Th2","P"),
+                     add=FALSE)
+  clines <- nullclines(T2P_cline_model, 
+                       xlim=c(0,2000),
+                       ylim=c(0,200),
+                       parameters=params2,
+                       col=c(1,2),
+                       lwd=2,
+                       state.names=c("Th2","P"),
+                       add.legend=FALSE)
+  eq1 <- findEquilibrium(T2P_cline_model, y0=c(200,130), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+  eq2 <- findEquilibrium(T2P_cline_model, y0=c(500,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+  eq3 <- findEquilibrium(T2P_cline_model, y0=c(1200,50), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+  eq4 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+  abline(h=0, lwd=2, col=2)
+#  legend(x='topright', paste0("T1=",200), bty='n')
+  legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+#}
+
+
+
+```
+
+From this, however, it's obvious that there are other possible ways that the isoclines can intersect.
+In particular, we can consider two ways of modifying the $P$ nullcline by changing the parameters of the parasite growth equation that change the intersections.
+If I increase the carrying capacity for the parasite, then there are two equilibria, only one of which is stable, and represents the coexistence of both Th2 and P at a relatively high point (Fig. \@ref(fig:T2Pisocline2).
+```{r T2Pisocline2, fig.width=6, fig.height=6, fig.cap="Nullcline configuration and stability if the parasite carrying capacity is increased."}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=4, Kp=200, a=0.002)
+params2 <- c(params, T1=200)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(1200,50), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq4 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+abline(h=0, lwd=2, col=2)
+#legend(x='topright', paste0("T1=",T1), bty='n')
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+
+```
+
+On the other hand, if increase the immune system's killing ability by increasing $a$, then there are two equilibria, one of which is stable, and represents the coexistence of both Th2 and P at a low immune biomass (Fig. \@ref(fig:T2Pisocline3).
+```{r T2Pisocline3, fig.width=6, fig.height=6, fig.cap="Nullcline configuration and stability if the immune attack rate is increased."}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=4, Kp=150, a=0.005)
+params2 <- c(params, T1=200)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+abline(h=0, lwd=2, col=2)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(200,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq4 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+#legend(x='topright', paste0("T1=",200), bty='n')
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+
+```
+
+
+The other way that the isocline configuration can be modified is by changing the shape of the Th2 isocline.
+In particular, if I lower the "trough" of the function so that it crosses the Th2 axis, there are other dynamical possibilities that appear.
+For example, if I reduce the immune loss rate $m$ from 1 to 0.95, I can get this configuration, with 4 equilibria, one of which is stable and represents the stable coexistence of the immune system and parasite with a high Th2 biomass and a low parasite biomass (Fig. \@ref(fig:T2Pisocline4))
+
+```{r T2Pisocline4, fig.width=6, fig.height=6, fig.cap="Nullcline configuration and stability when immune cell loss rate is lower."}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=150, a=0.002)
+params2 <- c(params, T1=200)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+abline(h=0, lwd=2, col=2)
+eq1 <- findEquilibrium(T2P_cline_model, y0=c(1200,50), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq2 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq4 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+
+```
+
+If I take that configuration but reduce the carrying capacity of the parasite, then I get the configuration in Fig. \@ref(fig:T2Pisocline5), with six equilibria, two of which are stable and represent the coexistence of the immune system and parasite at either an immune-dominated equilibrium, or a parasite-dominated one.
+
+```{r T2Pisocline5, fig.width=6, fig.height=6, fig.cap="Nullcline configuration and stability when immune cell loss rate is lower and the parasite carrying capacity is decreased."}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=100, a=0.002)
+params2 <- c(params, T1=200)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+abline(h=0, lwd=2, col=2)
+eq1 <- findEquilibrium(T2P_cline_model, y0=c(1200,50), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq2 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq4 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq5 <- findEquilibrium(T2P_cline_model, y0=c(100,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq6 <- findEquilibrium(T2P_cline_model, y0=c(600,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+
+```
+
+If I take that configuration, but increase the immune system's killing ability, then I get the configuration in Fig. \@ref(fig:T2Pisocline6), with five equilibria, two of which are stable and represent the coexistence of the immune system and parasite at an immune-dominated equilibrium or a parasite extinction equilibrium.
+This is a particularly interesting case, becuase it represents the two most biologically plausible outcomes of infection.
+
+```{r T2Pisocline6, fig.width=6, fig.height=6, fig.cap="Nullcline configuration and stability when immune cell loss rate is lower and the parasite carrying capacity is decreased, and the immune killing rate is increased."}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=100, a=0.004)
+params2 <- c(params, T1=200)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+abline(h=0, lwd=2, col=2)
+eq2 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq4 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq5 <- findEquilibrium(T2P_cline_model, y0=c(100,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq6 <- findEquilibrium(T2P_cline_model, y0=c(600,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+
+```
+
+Finally, if I increase the parasite's carrying capacity, I get the configuration in Fig. \@ref(fig:T2Pisocline7), with three equilibria, only one of which is plausible and represents parasite extinction.
+Contrasting this with the results in Fig. \@ref(fig:T2Pisocline6) is quite interesting, because it indicates that increasing the parasite's carrying capacity can actually put the system into a state where the only possible outcome is an acute infection.
+If we think about the model as a model of parasite biomass accumulation, then the total biomass that is possible should actually depend on dose in an important way. 
+In other way, the maximum parasite biomass should increase with dose as it increases the number of worms that could potentially reach adulthood. 
+Thus, increasing dose (and increasing parasite biomass carrying capacity) can shift the configuration of the system from one where the parasite can persist to one where it cannot.
+
+```{r T2Pisocline7, fig.width=6, fig.height=6, fig.cap="Nullcline configuration and stability when immune cell loss rate is lower and the parasite carrying capacity is decreased, and the immune killing rate is increased."}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=200, a=0.004)
+params2 <- c(params, T1=200)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+abline(h=0, lwd=2, col=2)
+eq2 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq4 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+
+```
+
+One way to build an extension to the model would be to more carefully consider the two aspects of parasite growth within the host, which is in terms of the *numbers* of parasites and the *biomass* of those parasites.
+The immune system can act to reduce the number of parasites, and it can act to decrease the biomass growth rate of the parasites.
+This may be an important extension to consider that more carefully deals with dose in a mechanistic way.
+
+However, it is important to note that in all of the above, I was only considering a single Th1 abundance ($T_1=200$). 
+What happens if the parasite is also secreting Th1 cytokines? 
+How does the Th2 and P nullcline configuration change as the T1 cell population grows?
+
+
+```{r}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=100, a=0.004)
+
+library(animation)
+if(!file.exists("movie6.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    for (T1 in seq(50,800,50)) {
+      #print(i)
+      params2 <- c(params, T1=T1)
+      flows <- flowField(T2P_cline_model, 
+                         xlim=c(0,2000),
+                         ylim=c(0,200),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th2","P"),
+                         add=FALSE)
+      clines <- nullclines(T2P_cline_model, 
+                           xlim=c(0,2000),
+                           ylim=c(0,200),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th2","P"),
+                           add.legend=FALSE)
+      abline(h=0, lwd=2, col=2)
+      eq2 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+      eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+      eq4 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+      eq5 <- findEquilibrium(T2P_cline_model, y0=c(100,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+      eq6 <- findEquilibrium(T2P_cline_model, y0=c(600,100), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+      legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+      legend(x='topright', paste0("T1=",T1))
+    }}, video.name="movie6.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
+
+
+
+```
+I will take the configuration shown in Fig. \@ref(fig:T2Pisocline6) and increase the Th1 abundance. 
+You can see that, as the Th1 cell population grows, eventually the acute infection equilibrium vanishes.
+This suggests that there may be two ways for the parasite to succeed. 
+One is by inducing a strong enough Th1 response to eliminate the possibility of an acute infection.
+The other is to avoid inducing a strong immune response at all.
+
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie6.mp4" type="video/mp4">
+</video>
+
+
+```{r, echo=FALSE, eval=FALSE}
+gillespie_sim <- function(tmax, y0, params, seed=NULL) {
+  if (!is.null(seed))
+    set.seed(seed)
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  
+  T1 <- y0[1]
+  T2 <- y0[2]
+  P <- y0[3]
+  
+  t <- 0
+  
+  ## set up storage for everything
+  out <- array(0, dim=c(1e6, 4))
+  colnames(out) <- c("Time", "Th1", "Th2", "P")
+  out[1,] <- c(t, T1, T2, P)
+  i <- 2
+ 
+  while (t < tmax) {
+    print(t)
+    ## compute event rates
+    prod1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) 
+    prod2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1)
+    death1 <- m*T1
+    death2 <- m*T2
+    birthP <- bp*P*(1-P/Kp)
+    deathP <- a*T2*P
+    rates <- c(prod1, prod2, death1, death2, birthP, deathP)
+    
+    ## what time does the event happen?
+    dt <- rexp(1, rate=sum(rates))
+    
+    ## update t 
+    t <- t + dt
+    
+    ## "wheel of fortune"
+    wheel <- cumsum(rates)/sum(rates)
+    
+    ## which event happens? Draw a random uniform to determine
+    rand <- runif(1)
+    
+    ## if event==1, a new Th1 cell is produced
+    ## if event==2, a new Th2 cell is produced
+    ## if event==3, a Th1 cell is destroyed
+    ## if event==4, a Th2 cell is destroyed
+    ## if event==5, a parasite is "born"
+    ## if event==6, a parasite dies
+    event <- 1 + sum(rand > wheel)
+    if (event==1)
+      T1 <- T1 + 1
+    else if (event==2)
+      T2 <- T2 + 1
+    else if (event==3)
+      T1 <- T1 - 1
+    else if (event==4)
+      T2 <- T2 - 1
+    else if (event==5)
+      P <- P+1
+    else P <- P-1
+    
+    out[i,] <- c(t, T1, T2, P)
+    
+    i <- i + 1
+    #print(out[i,])
+    if (i > nrow(out)) ## add more rows
+      out <- rbind(out, array(0, dim=c(1e6, 4)))
+  }
+  out <- out[1:(i-1),]
+  return(out)
+}
+
+library(magrittr)
+
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=1, Kp=200, a=0.01)
+out <- gillespie_sim(60, y0=c(5, 5, 10), params=params, seed=seeds[1])
+
+
+set.seed(1234)
+seeds <- runif(50, 1, 1000) %>% floor
+
+```
