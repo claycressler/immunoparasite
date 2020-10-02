@@ -144,20 +144,17 @@ We need to modify the parasite dynamics model to the following:
 To get some sense of this model's potential dynamics, it's actually quite useful to do some additional playing around with isocline analyses.
 However, in this case, I'm going to look at the isoclines for $P$ and $T_2$, treating $T_1$ as a constant. 
 This gives some sense of what's possible, in terms of the outcomes of the relevant immunoparasite dynamics.
-The $T_2$ isocline, given by $dP/dt=0$, is the line
+One $P$ isocline, given by $dP/dt=0$, is the line
 \begin{equation}
 T_2 = \frac{b_P (K_P-P)}{a K_P},
 \end{equation}
 with intercepts at $(T_2=b_P/a, P=0)$ and $(T_2=0, P=K_P)$.
-There are two $P$ isoclines. 
-One is given by $dT_2/dt = 0$, and is a cubic function; the other is the line $P=0$.
+The other is the line $P=0$. 
+The $T_2$ isocline, given by $dT_2/dt = 0$, is a cubic function.
 You can see a sample configuration for a balanced immune response in Fig. \@ref(fig:T2Pisoclines).
 Here there are four intersections between the three nullclines, corresponding to two stable equilibria (a high parasite, low Th2 equilibrium and a low parasite, high Th2 equilibrium), and two unstable equilibria (the equilibrium corresponding to zero parasites and "naive" immune response and an intermediate equilibrium).
 
 ```{r T2Pisoclines, fig.height=6, fig.width=6, fig.cap="Isoclines for T2 and P, assuming T1=200."}
-## Here is the dynamical outcome for a perfectly balanced immune induction
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=4, Kp=150, a=0.1)
-out <- ode(y=c(Th1=5,Th2=5,P=10), times=seq(0,200,1), func=full_model, parms=params) %>% as.data.frame
 
 full_model = function(t, y, params) {
   s1 <- params["s1"]
@@ -515,6 +512,355 @@ The other is to avoid inducing a strong immune response at all.
 <source src="/Users/ccressler2/immunoparasite/movie6.mp4" type="video/mp4">
 </video>
 
+The challenge here is figuring out what to plot. 
+What things are likely to vary among host or parasite genotypes? 
+One thing that's fairly easy to do is to look at the parasite isocline to clarify how changing *those* parameters will affect things.
+Recall that the intercepts of this linear equation are $(T_2=b_P/a, P=0)$ and $(T_2=0, P=K_P)$.
+Thus, changing the carrying capacity for the parasite slides the isocline up the y-axis, keeping the x-intercept fixed. 
+The effects of this change will depend, of course, on the relative position of the $T_2$ isocline.
+If the $T_2$ isocline intercepts the $T_2$ axis only once (near 0), then increasing the carrying capacity will tend to stabilize high immune, high parasite equilibrium; reducing the carrying capacity will tend to stabilize the low immune, low parasite equilibrium; intermediate carrying capacities can be bistable between these two equilibria.
+If the $T_2$ isocline intercepts the $T_2$ axis three times, the the effect of changing the carrying capacity depends quite a lot on where the $P$ isocline intercepts the $T_2$ axis. 
+If the $P$ isocline intercepts the $T_2$ axis beyond the third intercept of the $T_2$ isocline, then increasing the carrying capacity will tend to cause the system to stabilize at a high $T_2$, low parasite biomass equilibrium.
+Lowering the carrying capacity will cause the system to become bistable between a high $T_2$ and a low $T_2$ equilibrium.
+If the $P$ isocline intercepts the $T_2$ axis between the second and third intercepts of the $T_2$ isocline, then the acute infection equilibrium will always be stable, and increasing the carrying capacity will cause that to be the *only* stable equilibrium, whereas lowering the carrying capacity will cause bistability.
+If the $P$ isocline intercepts the $T_2$ axis between the first and second intercepts of the $T_2$ isocline, then there will always be bistability between an acute and chronic infection and increasing the carrying capacity will just increase the $P$ and $T_2$ abundances at the chronic equilibrium. 
+
+Of course, it is reasonable to argue that carrying capacity might be fairly irrelevant to most infections, which will never get anywhere near their carrying capacities any way.
+In such a case it is more reasonable to ask what might happen as you change either the parasite's growth rate $b_P$ or the immune response's attack rate $a$, which together determine the $T_2$ intercept ($b_P/a$).
+Again, this will depend on the number of intercepts of the $T_2$ isocline with the $T_2$ axis. 
+If there is a single intercept, then increasing $b_P/a$ will tend to cause the system to become stable at a high $P$, high $T_2$ equilibrium, whereas decreasing it will cause the system to become stable at a low $P$, low $T_2$ equilibrium.
+If there are three intercepts, then increasing $b_P/a$ will have similar effects. 
+However, if $b_P/a$ is small enough (lower than the third intercept of the $T_2$ isocline), then the acute infection equilibrium will always be stable, a key point.
+
+Thus, understanding the qualitative dynamical possibilities we are interested in (acute versus chronic) requires answering two questions: (1) how many times does the $T_2$ isocline intercept the $T_2$ axis; (2) if that answer is 3, is $b_P/a$ smaller than the third intercept?
+Unfortunately, there is essentially no analytical tractability to that question, as we are dealing with a cubic function.
+The zeros of a cubic function are complicated and, with a model of this complexity, there are no nice simplifications that make it possible to figure out how many there will be, unfortunately.
+
+The best thing to do in this scenario is just play out how changing the various parameters changes the shape of the isocline.
+
+```{r, echo=FALSE}
+##
+library(animation)
+if(!file.exists("movie7.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=200, a=0.004)
+    params2 <- c(params, T1=200)
+    for (m in seq(0.8,1.2,0.05)) {
+      #print(i)
+      params2["m"] <- m
+      flows <- flowField(T2P_cline_model, 
+                         xlim=c(0,2000),
+                         ylim=c(0,200),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th2","P"),
+                         add=FALSE)
+      clines <- nullclines(T2P_cline_model, 
+                           xlim=c(0,2000),
+                           ylim=c(0,200),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th2","P"),
+                           add.legend=FALSE)
+      legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+      legend(x='topright', paste0("m=",m))
+      abline(h=0, lwd=2, col=2)
+    }}, video.name="movie7.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
+
+```
+Increasing the background immune loss rate increases the height of the peak and the trough of the cubic function. 
+This decreases the chances of a stable acute infection equilibrium and makes it more likely that the only stable equilibrium will be one where the parasite persists at a high abundance, with a low abundance of Th2 cells.
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie7.mp4" type="video/mp4">
+</video>
+
+```{r, echo=FALSE}
+## increase the value of c2 
+if(!file.exists("movie8.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=200, a=0.004)
+    params2 <- c(params, T1=200)
+    for (c2 in seq(0.5,2,0.05)) {
+      #print(i)
+      params2["c2"] <- c2
+      flows <- flowField(T2P_cline_model, 
+                         xlim=c(0,2000),
+                         ylim=c(-50,200),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th2","P"),
+                         add=FALSE)
+      clines <- nullclines(T2P_cline_model, 
+                           xlim=c(0,2000),
+                           ylim=c(-50,200),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th2","P"),
+                           add.legend=FALSE)
+      legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+      legend(x='topright', paste0("c2=",c2))
+      abline(h=0, lwd=2, col=2)
+    }}, video.name="movie8.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
+
+```
+Increasing the parasite's stimulation of $T_2$ decreases the heights of the peak and trough, but without affecting the intercepts of the isocline with the $T_2$ axis.
+Thus, if the acute infection equilibrium is stable (because of the position of the $P$ isocline), increasing the stimulation of the $T_2$ response will tend to destabilize the chronic equilibrium, as you would expect. 
+However, if there is bistability between two chronic equilibria (a high parasite and low parasite equilibrium), then you will end up in a situation where only the high $T_2$, low $P$ equilibrium is stable.
+Again, this is exactly what you would expect.
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie8.mp4" type="video/mp4">
+</video>
+
+```{r, echo=FALSE}
+## increase the value of c2 
+if(!file.exists("movie9.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=200, a=0.004)
+    params2 <- c(params, T1=200)
+    for (s2 in seq(1500,2500,100)) {
+      #print(i)
+      params2["s2"] <- s2
+      flows <- flowField(T2P_cline_model, 
+                         xlim=c(0,2000),
+                         ylim=c(-50,200),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th2","P"),
+                         add=FALSE)
+      clines <- nullclines(T2P_cline_model, 
+                           xlim=c(0,2000),
+                           ylim=c(-50,200),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th2","P"),
+                           add.legend=FALSE)
+      legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+      legend(x='topright', paste0("s2=",s2))
+      abline(h=0, lwd=2, col=2)
+    }}, video.name="movie9.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
+
+```
+Increasing the autostimulation of the $T_2$ response by increasing $s_2$ drastically lowers the peak and trough of the $T_2$ isocline. 
+When $s_2$ is small, the only stable equilibrium is one where $P$ is relatively high and $T_2$ is low. 
+When $s_2$ is large, the only stable equilibrium is the acute infection equilibrium. 
+Again, this is exactly what you would expect.
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie9.mp4" type="video/mp4">
+</video>
+
+```{r, echo=FALSE}
+## increase the value of c2 
+if(!file.exists("movie1.mp4"))
+  saveVideo({ 
+    ani.options(interval=0.1)
+    params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1, bp=4, Kp=200, a=0.004)
+    params2 <- c(params, T1=200)
+    for (I21 in seq(6000,14000,500)) {
+      #print(i)
+      params2["I21"] <- I21
+      flows <- flowField(T2P_cline_model, 
+                         xlim=c(0,2000),
+                         ylim=c(-50,200),
+                         parameters=params2,
+                         system="two.dim",
+                         state.names=c("Th2","P"),
+                         add=FALSE)
+      clines <- nullclines(T2P_cline_model, 
+                           xlim=c(0,2000),
+                           ylim=c(-50,200),
+                           parameters=params2,
+                           col=c(1,2),
+                           lwd=2,
+                           state.names=c("Th2","P"),
+                           add.legend=FALSE)
+      legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+      legend(x='topright', paste0("I21=",I21))
+      abline(h=0, lwd=2, col=2)
+    }}, video.name="movie10.mp4", other.opts = "-pix_fmt yuv420p -b 300k")
+
+```
+Increasing the cross-inhibition of $T_2$ by $T_1$ has a relatively small effect (potentially because of the choice of $T_1$), and this effect is primarily on lowering the trough of the $T_2$ isocline. 
+Thus increasing the cross-inhibition could actually make an acute infection more likely (e.g., moving from bistability between two chronic equilibria bistability between an acute an a chronic equilibrium). 
+That is the only response that's a bit unexpected, although it does explain why bistability requires a large value of the cross-inhibition parameter. 
+<video width="720" height="720" controls>
+<source src="/Users/ccressler2/immunoparasite/movie9.mp4" type="video/mp4">
+</video>
+
+```{r,echo=FALSE, eval=FALSE}
+full_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+  P <- y[3]
+  
+  dT1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT1, dT2, dP))
+}
+
+library(deSolve)
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1.5, bp=4, Kp=80, a=0.004)
+params2 <- c(params, T1=00)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(-50,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(-50,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+abline(h=0, lwd=2, col=2)
+
+par(mfrow=c(2,2), mar=c(4.5,4.5,0.5,0.5), rep(0.5,4))
+Ts <- 450
+times <- seq(0,50,0.1)
+y0 <- c(T1=Ts,T2=Ts,P=20)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 20', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=40)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 40', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=80)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 80', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=120)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 120', bty='n')
+
+par(mfrow=c(2,2), mar=c(4.5,4.5,0.5,0.5), rep(0.5,4))
+Ts <- 450
+times <- seq(0,50,0.1)
+y0 <- c(T1=Ts,T2=Ts,P=20)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,3)], type='l')
+legend(x='topleft', 'Dose = 20', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=40)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,3)], type='l')
+legend(x='topleft', 'Dose = 40', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=80)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,3)], type='l')
+legend(x='topleft', 'Dose = 80', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=120)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,3)], type='l')
+legend(x='topleft', 'Dose = 120', bty='n')
+
+
+## Start with a naive immune response
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1.3, bp=4, Kp=150, a=0.004)
+params2 <- c(params, T1=600)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(-50,200),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(-50,200),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
+abline(h=0, lwd=2, col=2)
+
+
+par(mfrow=c(2,2), mar=c(4.5,4.5,0.5,0.5), rep(0.5,4))
+Ts <- 20
+times <- seq(0,50,0.1)
+y0 <- c(T1=Ts,T2=Ts,P=20)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 20', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=40)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 40', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=80)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 80', bty='n')
+
+y0 <- c(T1=Ts,T2=Ts,P=120)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 120', bty='n')
+
+
+### Immune bias
+par(mfrow=c(2,2), mar=c(4.5,4.5,0.5,0.5), rep(0.5,4))
+Ts <- 20
+times <- seq(0,50,0.1)
+y0 <- c(T1=500,T2=200,P=20)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 20', bty='n')
+
+y0 <- c(T1=500,T2=200,P=40)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 40', bty='n')
+
+y0 <- c(T1=500,T2=200,P=80)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 80', bty='n')
+
+y0 <- c(T1=500,T2=200,P=120)
+out <- ode(y0, times, full_model, params)
+plot(out[,c(1,4)], type='l')
+legend(x='topleft', 'Dose = 120', bty='n')
+
+
+
+```
 
 ```{r, echo=FALSE, eval=FALSE}
 gillespie_sim <- function(tmax, y0, params, seed=NULL) {
@@ -548,7 +894,7 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   i <- 2
  
   while (t < tmax) {
-    print(t)
+    
     ## compute event rates
     prod1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) 
     prod2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1)
@@ -602,8 +948,8 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
 
 library(magrittr)
 
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1, c2=1, bp=1, Kp=200, a=0.01)
-out <- gillespie_sim(60, y0=c(5, 5, 10), params=params, seed=seeds[1])
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1.2, bp=4, Kp=150, a=0.004)
+out <- gillespie_sim(100, y0=c(450, 450, 50), params=params, seed=12345)
 
 
 set.seed(1234)
