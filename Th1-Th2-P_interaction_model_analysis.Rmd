@@ -720,9 +720,61 @@ full_model = function(t, y, params) {
   list(c(dT1, dT2, dP))
 }
 
+T2P_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  T1 <- params["T1"]
+  
+  T2 <- y[1]
+  P <- y[2]
+
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT2, dP))
+}
+
+T1T2_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  P <- params["P"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+
+  dT1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+
+  list(c(dT1, dT2))
+}
+
 library(deSolve)
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1.5, bp=4, Kp=80, a=0.004)
-params2 <- c(params, T1=00)
+params = c(S1=800, S2=800, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=1.5, c2=1, bp=4, Kp=80, a=0.004)
+params2 <- c(params, T1=500)
 flows <- flowField(T2P_cline_model, 
                    xlim=c(0,2000),
                    ylim=c(-50,200),
@@ -741,11 +793,55 @@ clines <- nullclines(T2P_cline_model,
 legend(x='topleft', c("Th2 nullclines", "P nullclines"), lwd=2, col=c(1,2), bty='n')
 abline(h=0, lwd=2, col=2)
 
+## Here is a case where increasing dose (keeping Th1, Th2 initial conditions fixed) can lead you from acute to chronic
+par(mfcol=c(2,4))
+for (P in c(20,40,60,80)) {
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=3, c2=2, bp=5, Kp=80, a=0.004)
+params2 <- c(params, P=P)
+flows <- flowField(T1T2_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,2500),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th1","Th2"),
+                   add=FALSE)
+clines <- nullclines(T1T2_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,2500),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th1","Th2"),
+                     add.legend=FALSE)
+
+params3 <- c(params, T1=5*P)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(-50,200),
+                   parameters=params3,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(-50,200),
+                     parameters=params3,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+
+}
+
+
 par(mfrow=c(2,2), mar=c(4.5,4.5,0.5,0.5), rep(0.5,4))
-Ts <- 450
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=1, c1=3, c2=2, bp=4, Kp=80, a=0.004)
 times <- seq(0,50,0.1)
-y0 <- c(T1=Ts,T2=Ts,P=20)
+y0 <- c(T1=10,T2=600,P=20)
 out <- ode(y0, times, full_model, params)
+tail(out)
+
+
 plot(out[,c(1,4)], type='l')
 legend(x='topleft', 'Dose = 20', bty='n')
 
@@ -862,6 +958,283 @@ legend(x='topleft', 'Dose = 120', bty='n')
 
 ```
 
+I have struggled to find situations where increasing dose can move an infection from acute to chronic. 
+The opposite is fairly easy to find. 
+I think this is because the model I was using was not incorporating the lessons I learned from the analysis of simpler models. 
+In particular, I have induction of immunity as a linear function of parasite biomass, whereas the previous simple model showed that bistability required a nonlinear (saturating) function.
+Here is the new model:
+\begin{align}
+\frac{dT_i}{dt} &= b_i + c_i \frac{P}{C_i + P} + \frac{s_i T_i^2}{S_i^2 + T_i^2}\frac{I_{ij}}{I_{ij}+T_j} - m T_i, \\
+\frac{dP}{dt} &= b_P P \left(1-\frac{P}{K_P}\right) - a T_2 P
+\end{align}
+
+You can see that bistability in the Th1-Th2 plane is much more impervious to changes in parasite biomass in this model. 
+```{r}
+full_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  C1 <- params["C1"]
+  C2 <- params["C2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+  P <- y[3]
+  
+  dT1 <- b1 + c1*P/(C1+P) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT1, dT2, dP))
+}
+
+T2P_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  C1 <- params["C1"]
+  C2 <- params["C2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  T1 <- params["T1"]
+  
+  T2 <- y[1]
+  P <- y[2]
+
+  dT2 <- b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT2, dP))
+}
+
+T1T2_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  C1 <- params["C1"]
+  C2 <- params["C2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  P <- params["P"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+
+  dT1 <- b1 + c1*P/(C1+P) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+
+  list(c(dT1, dT2))
+}
+
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+par(mfrow=c(2,3))
+for (P in seq(40,240,40)) {
+params2 <- c(params, P=P)
+flows <- flowField(T1T2_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,2500),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th1","Th2"),
+                   add=FALSE)
+clines <- nullclines(T1T2_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,2500),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th1","Th2"),
+                     add.legend=FALSE)
+legend(x='topright', paste0("P = ", P))
+
+}
+
+
+```
+
+Here you can see how changing dose alters the configuration of the isoclines, showing the Th1 and Th2 isoclines for a low dose (black and red) and a high dose (blue and green) and initial Th1-Th2 densities where a low dose leads to a chronic infection but a high dose leads to clearance. 
+The flows show that, from an initial low dose, the movement in the phase plane is towards increasing Th1-ness and decreasing Th2-ness (grey) whereas an initial high dose flows towards increasing Th1-ness and increasing Th2-ness.
+The full picture is shown by pairing the Th1-Th2 isoclines with the Th2-P isoclines.
+You can see that, from a low dose, the parasite biomass is initially increasing, whereas from a high dose, the parasite biomass is initially decreasing.
+Putting the pictures together: from a low dose, the parasite biomass is increasing and the Th1 response is increasing while the Th2 response is decreasing (due to the fact that the system starts with a Th1 bias that allows the Th1 response to suppress the Th2); at a high dose, the parasite bimoass is decreasing and the Th1 and Th2 response are both increasing (due to the fact that the parasite population is larger, which stimulates the Th2 response).
+
+```{r}
+## Here are the isoclines for a low dose (black and red) and a high dose (blue and green) and initial Th1-Th2 densities where a low dose leads to a chronic infection but a high dose leads to clearance. The flows show that, from an initial low dose, the movement in the phase plane is towards increasing Th1-ness and decreasing Th2-ness (grey) whereas an initial high dose flows towards increasing Th1-ness and increasing Th2-ness.
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+par(mfrow=c(1,2))
+params2 <- c(params, P=40)
+flows <- flowField(T1T2_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,2500),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th1","Th2"),
+                   add=FALSE)
+clines <- nullclines(T1T2_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,2500),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th1","Th2"),
+                     add.legend=FALSE)
+params2 <- c(params, P=200)
+flows <- flowField(T1T2_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,2500),
+                   parameters=params2,
+                   system="two.dim",
+                   col="pink",
+                   state.names=c("Th1","Th2"),
+                   add=TRUE)
+clines <- nullclines(T1T2_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,2500),
+                     parameters=params2,
+                     col=c(3,4),
+                     lwd=2,
+                     state.names=c("Th1","Th2"),
+                     add.legend=FALSE)
+points(800,500)
+
+params2 <- c(params, T1=800)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,400),
+                   parameters=params2,
+                   system="two.dim",
+                   col="gray",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,400),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+abline(h=40)
+abline(h=200)
+abline(v=500)
+
+```
+
+So what we're looking for is a situation where the higher parasite biomass stimulates a Th1 response that would be decreasing to become increasing.
+
+```{r}
+## Here are the isoclines for a low dose (black and red) and a high dose (blue and green) and initial Th1-Th2 densities where a low dose leads to an acute infection but a high dose leads to a chronic infection The flows show that, from an initial low dose, the movement in the phase plane is towards increasing Th2-ness and decreasing Th1-ness (grey) whereas an initial high dose flows towards increasing Th1-ness and increasing Th2-ness.
+## However, numerical simulation reveals that this does not produce a shift from acute to chronic because the increased parasite abundance provokes a large immune response that eventually squashes the parasite. That is, the movement of the parasite biomass is actually towards decreasing biomass. Thus you actually need to pair these plots with plots showing how the parasite and Th2 change.
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=130, c2=100, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+
+par(mfrow=c(1,2), oma=rep(0.5,4), mar=c(4,4,0,0))
+params2 <- c(params, P=40)
+flows <- flowField(T1T2_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,2500),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th1","Th2"),
+                   add=FALSE)
+clines <- nullclines(T1T2_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,2500),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th1","Th2"),
+                     add.legend=FALSE)
+params2 <- c(params, P=120)
+flows <- flowField(T1T2_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,2500),
+                   parameters=params2,
+                   system="two.dim",
+                   col="pink",
+                   state.names=c("Th1","Th2"),
+                   add=TRUE)
+clines <- nullclines(T1T2_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,2500),
+                     parameters=params2,
+                     col=c(3,4),
+                     lwd=2,
+                     state.names=c("Th1","Th2"),
+                     add.legend=FALSE)
+points(400, 500)
+
+params2 <- c(params, T1=400)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2500),
+                   ylim=c(0,400),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th2","P"),
+                   add=FALSE)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2500),
+                     ylim=c(0,400),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=2,
+                     state.names=c("Th2","P"),
+                     add.legend=FALSE)
+abline(h=40)
+abline(h=120)
+abline(v=500)
+
+## What we're looking for is a spot where increasing dose moves the system from a spot where P and Th2 are increasing to a spot where P and Th1 are increasing.
+
+```
+
+
+```{r}
+
+## Here are parameters where the parasite can "sneak by" the immune response if it starts out small enough, but gets hammered if the dose is larger
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+out10 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
+out40 <- ode(y=c(T1=800,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
+out80 <- ode(y=c(T1=800,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
+out120 <- ode(y=c(T1=800,T2=500,P=120), times=seq(0,50,0.1), full_model, params)
+
+
+
+
+```
+
+
+
+
+
 ```{r, echo=FALSE, eval=FALSE}
 gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   if (!is.null(seed))
@@ -877,6 +1250,8 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   m <- params["m"]
   c1 <- params["c1"]
   c2 <- params["c2"]
+  C1 <- params["C1"]
+  C2 <- params["C2"]
   bp <- params["bp"]
   Kp <- params["Kp"]
   a <- params["a"]
@@ -896,8 +1271,8 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   while (t < tmax) {
     
     ## compute event rates
-    prod1 <- b1 + c1*P + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) 
-    prod2 <- b2 + c2*P + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1)
+    prod1 <- b1 + c1*P/(C1+P) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) 
+    prod2 <- b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1)
     death1 <- m*T1
     death2 <- m*T2
     birthP <- bp*P*(1-P/Kp)
@@ -948,9 +1323,36 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
 
 library(magrittr)
 
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=1, c2=1.2, bp=4, Kp=150, a=0.004)
-out <- gillespie_sim(100, y0=c(450, 450, 50), params=params, seed=12345)
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+set.seed(1234)
+seeds <- floor(runif(20,1,1e5))
+library(parallel)
+mclapply(seeds, 
+         function(s) gillespie_sim(40, y0=c(T1=800,T2=500,P=60), params=params, seed=s),
+         mc.cores=10) -> out
+lapply(out, function(o) tail(o,1))
 
+
+par(mfrow=c(2,2), oma=rep(0.5,4), mar=c(4,4,0,0))
+plot(out10[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=3, col=1, xlab="Age of infection", ylab="Parasite biomass")
+lines(out40[,c("time","P")], lwd=3, col=2, lty=2)
+lines(out80[,c("time","P")], lwd=3, col=4, lty=3)
+lines(out120[,c("time","P")], lwd=3, col=5, lty=4)
+
+plot(out10[,c("time","T2")], type='l', ylim=c(0,1200), xlim=c(0,25), lwd=3, col=1, xlab="Age of infection", ylab="Parasite biomass")
+lines(out40[,c("time","T2")], lwd=3, col=2, lty=2)
+lines(out80[,c("time","T2")], lwd=3, col=4, lty=3)
+lines(out120[,c("time","T2")], lwd=3, col=5, lty=4)
+
+plot(out[[5]][,c("Time","P")], type='l', ylim=c(0,250), xlim=c(0,40), lwd=1, xlab="Age of infection", ylab="Parasite biomass")
+lines(out[[7]][,c("Time","P")])
+lines(out[[20]][,c("Time","P")])
+
+plot(out[[5]][,c("Time","Th2")], type='l', ylim=c(0,1200), xlim=c(0,40), lwd=1, xlab="Age of infection", ylab="Parasite biomass")
+lines(out[[7]][,c("Time","Th2")])
+lines(out[[20]][,c("Time","Th2")])
+
+lapply()
 
 set.seed(1234)
 seeds <- runif(50, 1, 1000) %>% floor
