@@ -1107,6 +1107,8 @@ clines <- nullclines(T1T2_cline_model,
                      lwd=2,
                      state.names=c("Th1","Th2"),
                      add.legend=FALSE)
+eq2 <- findEquilibrium(T2P_cline_model, y0=c(0,0), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+      
 params2 <- c(params, P=200)
 flows <- flowField(T1T2_cline_model, 
                    xlim=c(0,2500),
@@ -1146,92 +1148,280 @@ clines <- nullclines(T2P_cline_model,
 abline(h=40)
 abline(h=200)
 abline(v=500)
-
 ```
 
-So what we're looking for is a situation where the higher parasite biomass stimulates a Th1 response that would be decreasing to become increasing.
-
 ```{r}
-## Here are the isoclines for a low dose (black and red) and a high dose (blue and green) and initial Th1-Th2 densities where a low dose leads to an acute infection but a high dose leads to a chronic infection The flows show that, from an initial low dose, the movement in the phase plane is towards increasing Th2-ness and decreasing Th1-ness (grey) whereas an initial high dose flows towards increasing Th1-ness and increasing Th2-ness.
-## However, numerical simulation reveals that this does not produce a shift from acute to chronic because the increased parasite abundance provokes a large immune response that eventually squashes the parasite. That is, the movement of the parasite biomass is actually towards decreasing biomass. Thus you actually need to pair these plots with plots showing how the parasite and Th2 change.
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=130, c2=100, C1=50, C2=50, bp=4, Kp=300, a=0.004)
-
-par(mfrow=c(1,2), oma=rep(0.5,4), mar=c(4,4,0,0))
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+jpeg(filename="Th1-Th2-multistability.jpeg", width=600, height=600, units='px', quality=90)
+par(mfrow=c(1,1), mar=c(5,5,1,1), oma=rep(0,4))
 params2 <- c(params, P=40)
 flows <- flowField(T1T2_cline_model, 
-                   xlim=c(0,2500),
-                   ylim=c(0,2500),
+                   xlim=c(0,2100),
+                   ylim=c(0,2100),
                    parameters=params2,
                    system="two.dim",
                    state.names=c("Th1","Th2"),
-                   add=FALSE)
+                   add=FALSE, 
+                   cex.axis=1.5,
+                   cex.lab=1.5)
 clines <- nullclines(T1T2_cline_model, 
-                     xlim=c(0,2500),
-                     ylim=c(0,2500),
+                     xlim=c(0,2100),
+                     ylim=c(0,2100),
                      parameters=params2,
                      col=c(1,2),
-                     lwd=2,
+                     lwd=4,
                      state.names=c("Th1","Th2"),
-                     add.legend=FALSE)
-params2 <- c(params, P=120)
-flows <- flowField(T1T2_cline_model, 
-                   xlim=c(0,2500),
-                   ylim=c(0,2500),
-                   parameters=params2,
-                   system="two.dim",
-                   col="pink",
-                   state.names=c("Th1","Th2"),
-                   add=TRUE)
-clines <- nullclines(T1T2_cline_model, 
-                     xlim=c(0,2500),
-                     ylim=c(0,2500),
-                     parameters=params2,
-                     col=c(3,4),
-                     lwd=2,
-                     state.names=c("Th1","Th2"),
-                     add.legend=FALSE)
-points(400, 500)
+                     add.legend=FALSE,
+                     cex.lab=1.5)
+legend(x='topright', legend=c("Th1 nullclines", "Th2 nullclines"), cex=1.5, lwd=3, col=c(1,2))
+eq1 <- findEquilibrium(T1T2_cline_model, y0=c(1,1), parameters=params2, system="two.dim", plot.it=TRUE, summary=FALSE)
+eq2 <- findEquilibrium(T1T2_cline_model, y0=c(1200,1200), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq3 <- findEquilibrium(T1T2_cline_model, y0=c(0,1500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq4 <- findEquilibrium(T1T2_cline_model, y0=c(1500,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq5 <- findEquilibrium(T1T2_cline_model, y0=c(500,500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq6 <- findEquilibrium(T1T2_cline_model, y0=c(500,1), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq7 <- findEquilibrium(T1T2_cline_model, y0=c(1,500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq8 <- findEquilibrium(T1T2_cline_model, y0=c(1500,500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq9 <- findEquilibrium(T1T2_cline_model, y0=c(500,1500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+points(eq1$ystar[1,1], eq1$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq2$ystar[1,1], eq2$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq3$ystar[1,1], eq3$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq4$ystar[1,1], eq4$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq5$ystar[1,1], eq5$ystar[2,1], cex=2.5)
+points(eq6$ystar[1,1], eq6$ystar[2,1], cex=2.5)
+points(eq7$ystar[1,1], eq7$ystar[2,1], cex=2.5)
+points(eq8$ystar[1,1], eq8$ystar[2,1], cex=2.5)
+points(eq9$ystar[1,1], eq9$ystar[2,1], cex=2.5)
 
-params2 <- c(params, T1=400)
+dev.off()
+
+jpeg(filename="Th2-P-multistability.jpeg", width=600, height=600, units='px', quality=90)
+par(mfrow=c(1,1), mar=c(5,5,1,1), oma=rep(0,4))
+params2 <- c(params, T1=800)
 flows <- flowField(T2P_cline_model, 
-                   xlim=c(0,2500),
-                   ylim=c(0,400),
+                   xlim=c(0,2000),
+                   ylim=c(0,450),
                    parameters=params2,
                    system="two.dim",
+                   col="gray",
                    state.names=c("Th2","P"),
-                   add=FALSE)
+                   add=FALSE,
+                   cex.axis=1.5,
+                   cex.lab=1.5)
 clines <- nullclines(T2P_cline_model, 
-                     xlim=c(0,2500),
-                     ylim=c(0,400),
+                     xlim=c(0,2000),
+                     ylim=c(0,450),
                      parameters=params2,
                      col=c(1,2),
-                     lwd=2,
+                     lwd=4,
                      state.names=c("Th2","P"),
+                     points=500,
                      add.legend=FALSE)
-abline(h=40)
-abline(h=120)
-abline(v=500)
+abline(h=0, lwd=4, col=2)
+legend(x='topright', legend=c("Th2 nullclines", "P nullclines"), cex=1.5, lwd=3, col=c(1,2))
+eq1 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq2 <- findEquilibrium(T2P_cline_model, y0=c(200,200), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+points(eq1$ystar[1,1], eq1$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq2$ystar[1,1], eq2$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq3$ystar[1,1], eq3$ystar[2,1], cex=2.5)
+dev.off()
 
-## What we're looking for is a spot where increasing dose moves the system from a spot where P and Th2 are increasing to a spot where P and Th1 are increasing.
-
-```
-
-
-```{r}
-
-## Here are parameters where the parasite can "sneak by" the immune response if it starts out small enough, but gets hammered if the dose is larger
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+## Variation in parasite dose can generate differences in infection duration
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=130, C1=50, C2=50, bp=4,Kp=300, a=0.004)
+## Start Th1 biased
 out10 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
+out20 <- ode(y=c(T1=800,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
 out40 <- ode(y=c(T1=800,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
 out80 <- ode(y=c(T1=800,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
-out120 <- ode(y=c(T1=800,T2=500,P=120), times=seq(0,50,0.1), full_model, params)
+## Start balanced
+out10.2 <- ode(y=c(T1=500,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
+out20.2 <- ode(y=c(T1=500,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
+out40.2 <- ode(y=c(T1=500,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
+out80.2 <- ode(y=c(T1=500,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
 
 
+jpeg(filename="Chronic-to-acute-Th1-biased.jpeg", width=600, height=600, units='px', quality=90)
+par(mfrow=c(1,1), mar=c(5,5,1,1), oma=rep(0,4))
+plot(out10[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80[,c("time","P")], lwd=4, col=gray(0.2))
+dev.off()
+
+jpeg(filename="Clearance-only-Th1-Th2-balanced.jpeg", width=600, height=600, units='px', quality=90)
+par(mfrow=c(1,1), mar=c(5,5,1,1), oma=rep(0,4))
+plot(out10.2[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20.2[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40.2[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80.2[,c("time","P")], lwd=4, col=gray(0.2))
+dev.off()
+
+
+params.2 = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=700, c2=0, C1=50, C2=50, bp=4, Kp=250, a=0.004)
+## start Th2 biased
+out10.3 <- ode(y=c(T1=0,T2=800,P=10), times=seq(0,500,0.1), full_model, params.2)
+out20.3 <- ode(y=c(T1=0,T2=800,P=20), times=seq(0,50,0.1), full_model, params.2)
+out40.3 <- ode(y=c(T1=0,T2=800,P=40), times=seq(0,50,0.1), full_model, params.2)
+out80.3 <- ode(y=c(T1=0,T2=800,P=80), times=seq(0,50,0.1), full_model, params.2)
+## start balanced
+out10.4 <- ode(y=c(T1=400,T2=400,P=10), times=seq(0,500,0.1), full_model, params.2)
+out20.4 <- ode(y=c(T1=400,T2=400,P=20), times=seq(0,50,0.1), full_model, params.2)
+out40.4 <- ode(y=c(T1=400,T2=400,P=40), times=seq(0,50,0.1), full_model, params.2)
+out80.4 <- ode(y=c(T1=400,T2=400,P=80), times=seq(0,50,0.1), full_model, params.2)
+
+jpeg(filename="Acute-to-chronic-Th2-biased.jpeg", width=600, height=600, units='px', quality=90)
+par(mfrow=c(1,1), mar=c(5,5,1,1), oma=rep(0,4))
+plot(out10.3[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20.3[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40.3[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80.3[,c("time","P")], lwd=4, col=gray(0.2))
+dev.off()
+
+jpeg(filename="Chronic-only-Th1-Th2-balanced.jpeg", width=600, height=600, units='px', quality=90)
+par(mfrow=c(1,1), mar=c(5,5,1,1), oma=rep(0,4))
+plot(out10.4[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20.4[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40.4[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80.4[,c("time","P")], lwd=4, col=gray(0.2))
+dev.off()
 
 
 ```
 
+```{r}
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+params2 <- c(params, T1=800)
+eq1 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq2 <- findEquilibrium(T2P_cline_model, y0=c(200,200), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
 
+par(mfcol=c(2,3), mar=c(5,5,0.5,0.5), oma=c(0,0,3,3))
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,450),
+                   parameters=params2,
+                   system="two.dim",
+                   col="gray",
+                   state.names=c("Th2 response","Parasite"),
+                   add=FALSE,
+                   cex.axis=1.5,
+                   cex.lab=1.5)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,450),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=4,
+                     state.names=c("Th2 response","Parasite"),
+                     points=500,
+                     add.legend=FALSE)
+abline(h=0, lwd=4, col=2)
+legend(x='topleft', legend=c("Th2 nullclines", "P nullclines"), cex=1, lwd=3, col=c(1,2))
+legend(x='topright', legend=c("A"), cex=1.5, bty='n')
+mtext(side=3, line=0.5, "Dynamical Profile of\nImmune-Parasite Interaction", cex=1)
+points(eq1$ystar[1,1], eq1$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq2$ystar[1,1], eq2$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq3$ystar[1,1], eq3$ystar[2,1], cex=2.5)
+
+params2 <- c(params, P=40)
+eq1 <- findEquilibrium(T1T2_cline_model, y0=c(1,1), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq2 <- findEquilibrium(T1T2_cline_model, y0=c(1200,1200), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq3 <- findEquilibrium(T1T2_cline_model, y0=c(0,1500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq4 <- findEquilibrium(T1T2_cline_model, y0=c(1500,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq5 <- findEquilibrium(T1T2_cline_model, y0=c(500,500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq6 <- findEquilibrium(T1T2_cline_model, y0=c(500,1), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq7 <- findEquilibrium(T1T2_cline_model, y0=c(1,500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq8 <- findEquilibrium(T1T2_cline_model, y0=c(1500,500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq9 <- findEquilibrium(T1T2_cline_model, y0=c(500,1500), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+
+flows <- flowField(T1T2_cline_model, 
+                   xlim=c(0,2100),
+                   ylim=c(0,2100),
+                   parameters=params2,
+                   system="two.dim",
+                   state.names=c("Th1 response","Th2 response"),
+                   add=FALSE, 
+                   cex.axis=1.5,
+                   cex.lab=1.5)
+clines <- nullclines(T1T2_cline_model, 
+                     xlim=c(0,2100),
+                     ylim=c(0,2100),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=4,
+                     state.names=c("Th1 response","Th2 response"),
+                     add.legend=FALSE,
+                     cex.lab=1.5)
+legend(x='topleft', legend=c("Th1 nullclines", "Th2 nullclines"), cex=1, lwd=3, col=c(1,2))
+legend(x='topright', legend=c("B"), cex=1.5, bty='n')
+points(eq1$ystar[1,1], eq1$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq2$ystar[1,1], eq2$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq3$ystar[1,1], eq3$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq4$ystar[1,1], eq4$ystar[2,1], pch=21, bg=1, cex=2.5)
+points(eq5$ystar[1,1], eq5$ystar[2,1], cex=2.5)
+points(eq6$ystar[1,1], eq6$ystar[2,1], cex=2.5)
+points(eq7$ystar[1,1], eq7$ystar[2,1], cex=2.5)
+points(eq8$ystar[1,1], eq8$ystar[2,1], cex=2.5)
+points(eq9$ystar[1,1], eq9$ystar[2,1], cex=2.5)
+
+
+## Variation in parasite dose can generate differences in infection duration
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=130, C1=50, C2=50, bp=4,Kp=300, a=0.004)
+## Start Th1 biased
+out10 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
+out20 <- ode(y=c(T1=800,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
+out40 <- ode(y=c(T1=800,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
+out80 <- ode(y=c(T1=800,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
+## Start balanced
+out10.2 <- ode(y=c(T1=500,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
+out20.2 <- ode(y=c(T1=500,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
+out40.2 <- ode(y=c(T1=500,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
+out80.2 <- ode(y=c(T1=500,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
+
+
+plot(out10[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80[,c("time","P")], lwd=4, col=gray(0.2))
+legend(x='topright', legend=c("C1"), cex=1.5, bty='n')
+mtext(side=3, line=0.5, "Chronicity-Promoting >\nClearance-Promoting", cex=1)
+
+plot(out10.2[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20.2[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40.2[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80.2[,c("time","P")], lwd=4, col=gray(0.2))
+legend(x='topright', legend=c("D1"), cex=1.5, bty='n')
+
+
+params.2 = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=700, c2=0, C1=50, C2=50, bp=4, Kp=250, a=0.004)
+## start Th2 biased
+out10.3 <- ode(y=c(T1=0,T2=800,P=10), times=seq(0,500,0.1), full_model, params.2)
+out20.3 <- ode(y=c(T1=0,T2=800,P=20), times=seq(0,50,0.1), full_model, params.2)
+out40.3 <- ode(y=c(T1=0,T2=800,P=40), times=seq(0,50,0.1), full_model, params.2)
+out80.3 <- ode(y=c(T1=0,T2=800,P=80), times=seq(0,50,0.1), full_model, params.2)
+## start balanced
+out10.4 <- ode(y=c(T1=400,T2=400,P=10), times=seq(0,500,0.1), full_model, params.2)
+out20.4 <- ode(y=c(T1=400,T2=400,P=20), times=seq(0,50,0.1), full_model, params.2)
+out40.4 <- ode(y=c(T1=400,T2=400,P=40), times=seq(0,50,0.1), full_model, params.2)
+out80.4 <- ode(y=c(T1=400,T2=400,P=80), times=seq(0,50,0.1), full_model, params.2)
+
+plot(out10.4[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20.4[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40.4[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80.4[,c("time","P")], lwd=4, col=gray(0.2))
+legend(x='topright', legend=c("C2"), cex=1.5, bty='n')
+mtext(side=3, line=0.5, "Chronicity-Promoting >\nClearance-Promoting", cex=1)
+mtext(side=4, line=0.5, "Initial Th1 Bias", cex=1, srt=180)
+
+plot(out10.3[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=4, col=gray(0.8), xlab="Age of infection", ylab="Parasite biomass", cex.axis=1.5, cex.lab=1.5)
+lines(out20.3[,c("time","P")], lwd=4, col=gray(0.6))
+lines(out40.3[,c("time","P")], lwd=4, col=gray(0.4))
+lines(out80.3[,c("time","P")], lwd=4, col=gray(0.2))
+legend(x='topright', legend=c("D2"), cex=1.5, bty='n')
+
+
+```
 
 
 
@@ -1322,19 +1512,44 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
 }
 
 library(magrittr)
-
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
-set.seed(1234)
-seeds <- floor(runif(20,1,1e5))
 library(parallel)
-mclapply(seeds, 
-         function(s) gillespie_sim(40, y0=c(T1=800,T2=500,P=60), params=params, seed=s),
-         mc.cores=10) -> out
-lapply(out, function(o) tail(o,1))
+
+set.seed(1234)
+seeds <- floor(runif(40,1,1e5))
+
+## Simulations where increasing dose goes from chronic --> acute
+## Do 40 stochastic simulations and compute the time to clearance (with 50 meaning no clearance)
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=130, C1=50, C2=50, bp=4,Kp=300, a=0.004)
+params.2 = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=800, c2=60, C1=50, C2=50, bp=4, Kp=300, a=0.004)
+
+doses <- c(10,20,40,80,120)
+durations <- array(NA, dim=c(length(seeds), length(doses), 2))
+for (i in 1:length(doses)) {
+  print(i)
+  mclapply(seeds, 
+           function(s) {
+             out <- gillespie_sim(50, y0=c(T1=800,T2=500,P=doses[i]), params=params, seed=s);
+             ifelse(any(out[,"P"]==0), out[min(which(out[,"P"]==0)),"Time"], 50)
+           },
+           mc.cores=10) %>% unlist -> durations[,i,1]
+  mclapply(seeds, 
+         function(s) {
+           out <- gillespie_sim(50, y0=c(T1=0,T2=800,P=doses[i]), params=params.2, seed=s);
+           ifelse(any(out[,"P"]==0), out[min(which(out[,"P"]==0)),"Time"], 50)
+         },
+         mc.cores=10) %>% unlist -> durations[,i,2]
+}
+
+           
+## Simulations where increasing dose goes from acute --> chronic
+
+
+lapply(out.2, function(o) tail(o,1))
 
 
 par(mfrow=c(2,2), oma=rep(0.5,4), mar=c(4,4,0,0))
 plot(out10[,c("time","P")], type='l', ylim=c(0,250), xlim=c(0,25), lwd=3, col=1, xlab="Age of infection", ylab="Parasite biomass")
+lines(out20[,c("time","P")], lwd=3, col=2, lty=2)
 lines(out40[,c("time","P")], lwd=3, col=2, lty=2)
 lines(out80[,c("time","P")], lwd=3, col=4, lty=3)
 lines(out120[,c("time","P")], lwd=3, col=5, lty=4)
