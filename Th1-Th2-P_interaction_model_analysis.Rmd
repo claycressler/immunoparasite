@@ -1142,7 +1142,7 @@ abline(h=200)
 abline(v=500)
 ```
 
-```{r, eval=FALSE}
+```{r, eval=FALSE, echo=FALSE}
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
 jpeg(filename="Th1-Th2-multistability.jpeg", width=600, height=600, units='px', quality=90)
 par(mfrow=c(1,1), mar=c(5,5,1,1), oma=rep(0,4))
@@ -1653,7 +1653,7 @@ seeds <- runif(50, 1, 1000) %>% floor
 
 ```
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 full_model = function(t, y, params) {
   s1 <- params["s1"]
   s2 <- params["s2"]
@@ -1846,7 +1846,7 @@ plot(out80.8)
 ```
 
 
-```{r}
+```{r, echo=FALSE, eval=FALSE}
 full_model = function(t, y, params) {
   s1 <- params["s1"]
   s2 <- params["s2"]
@@ -1879,61 +1879,181 @@ full_model = function(t, y, params) {
 ## Strong chronicity-promoting feedbacks
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=130, C1=50, C2=50, bp=3, Kp=300, a=0.003)
 
-## Start Th1 biased
-out10.3 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,500,0.1), full_model, params)
-out20.3 <- ode(y=c(T1=800,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
-out40.3 <- ode(y=c(T1=800,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
-out80.3 <- ode(y=c(T1=800,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
-
-
 ## Sooooooo sensitive to initial immune conditions
 ## For i1 = 1300-i2 and i2 < 500, all infections become chronic
 ## For i2 > 500, all infections are acute
 ## For i2 = 500, you switch from chronic at low dose to acute at high dose
 lapply(seq(100,1200,100), function(i2) sapply(seq(10,80,1), function(p) ode(y=c(T1=1300-i2,T2=i2,P=p), times=seq(0,500,0.1), full_model, params)[5001,"P"] %>% unname)) -> outcomes
 
+## Find the immune value where you switch from chronic to acute for each dose, totalT, and immune induction level
+th2Induction <- seq(0,200) %>% as.list
+mclapply(th2Induction, 
+         function(th2) {
+           params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=200-th2, c2=th2, C1=50, C2=50, bp=3, Kp=300, a=0.003)
+           results <- expand.grid(dose=seq(10,100,1), totalT=seq(200,2000,100), T2=0)
+           for (i in 1:nrow(results)) {
+             litT2 <- 0
+             bigT2 <- results$totalT[i]
+             midT2 <- bigT2/2
+             P1 = ode(y=c(T1=results$totalT[i]-litT2,T2=litT2,P=results$dose[i]), times=seq(0,100), full_model,params)[101,4]
+             P2 = ode(y=c(T1=results$totalT[i]-midT2,T2=midT2,P=results$dose[i]), times=seq(0,100), full_model,params)[101,4]
+             P3 = ode(y=c(T1=results$totalT[i]-bigT2,T2=bigT2,P=results$dose[i]), times=seq(0,100), full_model,params)[101,4]
+             if(sum(round(c(P1,P2,P3)))==0) 
+               results[i,"T2"] <- 0
+             else if(all(c(P1,P2,P3) > 20))
+               results[i,"T2"] <- results$totalT[i]
+             else {
+               while(bigT2-midT2 > 1) {
+                 if(round(abs(P1-P2)) > round(abs(P2-P3))) { ## acute to chronic switch happens in the first interval
+                   ## litT2 stays the same and bigT2 becomes midT2 =>
+                   ## P1 remains the same and P3 becomes P2
+                   bigT2 <- midT2
+                   P3 <- P2
+                   ## midT2 is halfway between litT2 and bigT2
+                   midT2 <- (bigT2+litT2)/2
+                   P2 <- ode(y=c(T1=results$totalT[i]-midT2,T2=midT2,P=results$dose[i]), times=seq(0,100), full_model,params)[101,4]
+                 } else {
+                   ## bigT2 stays the same and litT2 becomes midT2 =>
+                   ## P3 remains the same and P1 becomes P2
+                   litT2 <- midT2
+                   P1 <- P2
+                   ## midT2 is halfway between litT2 and bigT2
+                   midT2 <- (bigT2+litT2)/2
+                   P2 <- ode(y=c(T1=results$totalT[i]-midT2,T2=midT2,P=results$dose[i]), times=seq(0,100), full_model,params)[101,4]
+                 }
+               }
+               results[i,"T2"] <- midT2
+             }
+           }
+           return(results)
+         },
+         mc.cores=12) -> output
+saveRDS(output, file="Th2_thresholds_between_acute_and_chronic_across_doses_totalT-cells_and_Th1Th2induction.RDS")
+```
+
+```{r Th2induction0, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 200 and the rate of Th2 induction is 0."}
+output <- readRDS(file="Th2_thresholds_between_acute_and_chronic_across_doses_totalT-cells_and_Th1Th2induction.RDS")
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[1]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction25, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 175 and the rate of Th2 induction is 25."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[26]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction50, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 150 and the rate of Th2 induction is 50."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[51]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction75, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 125 and the rate of Th2 induction is 75."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[76]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction100, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 100 and the rate of Th2 induction is 100."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[101]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction125, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 75 and the rate of Th2 induction is 125."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[126]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction150, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 50 and the rate of Th2 induction is 150."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[151]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction175, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 25 and the rate of Th2 induction is 175."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[176]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+```{r Th2induction200, fig.height=8, fig.width=12, units='in', fig.cap="Figure showing how initial Th2-ness (x-axis) influences when infections are chronic (left of the solid line) versus chronic (right of the solid line), for different initial parasite doses (y-axis) and different initial numbers of T cells (panels). In this figure, the rate of Th1 induction by the parasite is 0 and the rate of Th2 induction is 200."}
+par(mfrow=c(4,5), mar=c(3,3,0.5,0.5), oma=c(2,2,0,0))
+for (i in seq(200,2000,100)) {
+  r <- subset(output[[201]], totalT==i)
+  plot(r$T2/i, r$dose, xlim=c(0,1), ylab="", xlab="", type='l', lwd=3)
+  legend(x='topright',legend=i,bty='n')
+  if(diff(range(r$T2)) > 1) {
+    abline(v=min(r$T2/i), lty=2)
+    abline(v=max(r$T2/i), lty=2)
+  }
+}
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+ 
+ 
 ## Okay, what if you trickle in the infection?
-d <- 120
-out1 <- ode(y=c(T1=800,T2=500,P=d), times=seq(0,50,0.1), full_model, params)
-plot(out1[,c(1,3)], type='l')
-
-d <- 30
-out1 <- ode(y=c(T1=800,T2=500,P=d), times=seq(0,50,0.1), full_model, params)
-plot(out1[,c(1,3)], type='l')
-
-
-## 120 but spread out - still clearance
-d <- 30
-eventdat <- data.frame(var=c("P"),
-                       time=c(5,10,15),
-                       value=c(d),
-                       method=c("add"))
-out2 <- ode(y=c(T1=800,T2=500,P=d), times=seq(0,50,0.05), full_model, params, events=list(data=eventdat))
-plot(out2[,c(1,4)], type='l')
-
-## spread further and no clearance
-d <- 30
-eventdat <- data.frame(var=c("P"),
-                       time=c(10,20,30),
-                       value=c(d),
-                       method=c("add"))
-out2 <- ode(y=c(T1=800,T2=500,P=d), times=seq(0,50,0.05), full_model, params, events=list(data=eventdat))
-plot(out2[,c(1,4)], type='l')
-
-## If dose is really small, even if dosing happens very frequently, won't get clearance, even if the total dose ends up being larger than the initial bolus
-d <- 20
-eventdat <- data.frame(var=c("P"),
-                       time=1:10,
-                       value=c(d),
-                       method=c("add"))
-out2 <- ode(y=c(T1=800,T2=500,P=d), times=seq(0,50,0.05), full_model, params, events=list(data=eventdat))
-plot(out2[,c(1,4)], type='l')
-
-
-
-
-## Everything happens so fast in this model. Need for things to slooowwww down.
-## Strong chronicity-promoting feedbacks
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=130, C1=20, C2=20, bp=0.03, Kp=300, a=0.0001)
 
 ## Dose of 60 is cleared
