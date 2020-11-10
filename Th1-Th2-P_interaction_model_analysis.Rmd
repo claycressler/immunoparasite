@@ -2205,3 +2205,43 @@ lines(out60.2[,c(1,2)], lwd=3, col=gray(0.4))
 
 ```
 
+```{r grant_figure_4, fig.height=12, fig.width=12, units='in', fig.cap="Dose is 60 across all simulations. The first contrast shows a shift towards a chronic infection caused by weakening the negative feedbacks, as might be expected if the system shifts towards tolerance. The second shows a shift towards a chronic infection caused by strengthening the baseline level of Th1 stimulation, thereby increasing the initial Th1ness of the system. }
+
+## Three ways the system can shift towards acute
+
+## Baseline clearance
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=200, C1=50, C2=50, bp=4,Kp=300, a=0.006)
+out1 <- ode(y=c(T1=1,T2=1,P=60), times=seq(0,40,0.1), full_model, params)
+
+## Way #1: weaken the negative feedbacks in the system
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=25, c2=75, C1=50, C2=50, bp=4,Kp=300, a=0.001)
+out2 <- ode(y=c(T1=1,T2=1,P=60), times=seq(0,40,0.1), full_model, params)
+
+## Way #2: strengthen baseline stimulation of the immune system towards Th1ness
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=80, b2=5, I12=10000, I21=10000, m=0.9, c1=50, c2=150, C1=50, C2=50, bp=4,Kp=300, a=0.006)
+out3 <- ode(y=c(T1=200,T2=1,P=60), times=seq(0,40,0.1), full_model, params)
+
+## Way #3: weaken chronicity-promoting feedbacks
+params = c(S1=1000, S2=1000, s1=2000, s2=1500, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=150, C1=50, C2=50, bp=4,Kp=300, a=0.006)
+out4 <- ode(y=c(T1=1,T2=1,P=60), times=seq(0,40,0.1), full_model, params)
+
+
+par(mfrow=c(1,3), mar=c(2.5,5,1,1), oma=rep(0.5,4))
+plot(out1[,c(1,4)], type='l', lwd=3, lty=2, col=gray(0.8), xlab='', ylab='', ylim=c(0,300), cex.axis=1.5)
+mtext(side=2, line=3.5, "Parasite biomass", cex=1.5)
+#lines(out2[,c(1,4)], lwd=3, col=gray(0.6))
+lines(out3[,c(1,4)], lwd=3, col=gray(0.4))
+lines(out4[,c(1,4)], lwd=3, col=gray(0))
+
+plot(out1[,c(1,3)], type='l', lwd=3, lty=2, col=gray(0.8), xlab='', ylab='', ylim=c(0,1600), cex.axis=1.5)
+mtext(side=2, line=3.5, "Th2 response", cex=1.5)
+#lines(out2[,c(1,3)], lwd=3, col=gray(0.6))
+lines(out3[,c(1,3)], lwd=3, col=gray(0.4))
+lines(out4[,c(1,3)], lwd=3, col=gray(0))
+
+plot(out1[,c(1,2)], type='l', lwd=3, lty=2, col=gray(0.8), xlab='', ylab='', ylim=c(0,1800), cex.axis=1.5)
+mtext(side=2, line=3.5, "Th1 response", cex=1.5)
+#lines(out2[,c(1,2)], lwd=3, col=gray(0.6))
+lines(out3[,c(1,2)], lwd=3, col=gray(0.4))
+lines(out4[,c(1,2)], lwd=3, col=gray(0))
+
