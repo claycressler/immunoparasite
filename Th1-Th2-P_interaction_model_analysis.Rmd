@@ -9,6 +9,56 @@ knitr::opts_chunk$set(echo = FALSE,
                       fig.path='figures/')
 ```
 
+```{r}
+library(deSolve)
+library(phaseR, quietly=TRUE)
+library(magrittr)
+
+LVcomp <- function(t, y, params) {
+  r1 <- params["r1"]
+  r2 <- params["r2"]
+  K1 <- params["K1"]
+  K2 <- params["K2"]
+  a12 <- params["a12"]
+  a21 <- params["a21"]
+  
+  N1 <- y[1]
+  N2 <- y[2]
+  
+  dN1 <- r1*N1*(1-(N1+a12*N2)/K1)
+  dN2 <- r2*N2*(1-(N2+a21*N1)/K2)
+  
+  list(c(dN1,dN2))
+}
+
+pars <- c(r1=0.1, r2=0.1, K1=100, K2=100, a12=2, a21=2)
+
+par(mar=c(4.5,4.5,1,1), oma=rep(0,4))
+flowField(LVcomp, 
+          xlim=c(0,100),
+          ylim=c(0,100),
+          parameters=pars,
+          system="two.dim",
+          col='black',
+          state.names=c(expression(N[1]),expression(N[2])),
+          add=FALSE)
+
+abline(a=50, b=-0.5, col=1, lwd=2)
+abline(a=100, b=-2, col=2, lwd=2)
+
+abline(h=0, col=2, lwd=2)
+abline(v=0, col=1, lwd=2)
+
+findEquilibrium(LVcomp, y0=c(100,0), parameters=pars, system="two.dim", plot.it=TRUE, summary=FALSE)
+findEquilibrium(LVcomp, y0=c(0,100), parameters=pars, system="two.dim", plot.it=TRUE, summary=FALSE)
+findEquilibrium(LVcomp, y0=c(35,35), parameters=pars, system="two.dim", plot.it=TRUE, summary=FALSE)
+findEquilibrium(LVcomp, y0=c(0,0), parameters=pars, system="two.dim", plot.it=TRUE, summary=FALSE)
+legend(x='topright', c(expression(N[1]~~"nullcline"),expression(N[2]~~"nullcline")), lwd=2, col=c(1,2))
+
+
+
+```
+
 ## Model of Th1-Th2-P interactions
 
 Let's consider a model with a dynamic parasite population that both grows logistically and suffers mortality (or loss of biomass) due to immune response (but only one cell-type).
@@ -89,14 +139,14 @@ if(!file.exists("movie5.mp4"))
     for (i in 1:120) {
       #print(i)
       params2 <- c(params, P=out[i,"P"])
-      flows <- flowField(derivs, 
+      flows <- flowField(cline_model, 
                          xlim=c(0,2000),
                          ylim=c(0,2000),
                          parameters=params2,
                          system="two.dim",
                          state.names=c("Th1","Th2"),
                          add=FALSE)
-      clines <- nullclines(derivs, 
+      clines <- nullclines(cline_model, 
                            xlim=c(0,2000),
                            ylim=c(0,2000),
                            parameters=params2,
