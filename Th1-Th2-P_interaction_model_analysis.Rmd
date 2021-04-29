@@ -1691,7 +1691,7 @@ out20.2 <- ode(y=c(T1=500,T2=800,P=20), times=seq(0,50,0.1), full_model, params)
 out40.2 <- ode(y=c(T1=500,T2=800,P=40), times=seq(0,50,0.1), full_model, params)
 out80.2 <- ode(y=c(T1=500,T2=800,P=80), times=seq(0,50,0.1), full_model, params)
 
-## Strong chronicity-promoting feedbacks
+## Strong clearance-promoting feedbacks
 params.2 = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=130, C1=50, C2=50, bp=4,Kp=300, a=0.004)
 ## Start Th1 biased
 out10.3 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,50,0.1), full_model, params.2)
@@ -1704,7 +1704,7 @@ out20.4 <- ode(y=c(T1=500,T2=800,P=20), times=seq(0,50,0.1), full_model, params.
 out40.4 <- ode(y=c(T1=500,T2=800,P=40), times=seq(0,50,0.1), full_model, params.2)
 out80.4 <- ode(y=c(T1=500,T2=800,P=80), times=seq(0,50,0.1), full_model, params.2)
 
-## Strong clearance-promoting feedbacks
+## Strong chronicity-promoting feedbacks
 params.3 = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=700, c2=0, C1=50, C2=50, bp=4, Kp=250, a=0.004)
 ## start Th1 biased
 out10.5 <- ode(y=c(T1=600,T2=400,P=10), times=seq(0,500,0.1), full_model, params.3)
@@ -1717,12 +1717,50 @@ out20.6 <- ode(y=c(T1=0,T2=800,P=20), times=seq(0,50,0.1), full_model, params.3)
 out40.6 <- ode(y=c(T1=0,T2=800,P=40), times=seq(0,50,0.1), full_model, params.3)
 out80.6 <- ode(y=c(T1=0,T2=800,P=80), times=seq(0,50,0.1), full_model, params.3)
 
-## Make movies showing how the two nullcline configurations change as the system evolves
+outlist <- list(out10,out80,
+                out10.2,out80.2,
+                out10.3,out80.3,
+                out10.4,out80.4,
+                out10.5,out80.5,
+                out10.6,out80.6)
 
+library(animation)
+if(!file.exists("movie1_for_mathbio_talk.mp4")) {
+  for (j in 1:length(outlist)) {
+    print(j)
+    out <- outlist[[j]]
+    if (j %in% 1:4) params <- params
+    else if (j %in% 5:8) params <- params.2
+    else params <- params.3
+    saveVideo({ 
+      ani.options(interval=0.1)
+      for (i in seq(1,501,5)) {
+        params2 <- c(params, out[i,4])
+        par(mfrow=c(1,2), mar=c(4.5,4.5,1,1), oma=rep(0.5,4))
+        flowField(T1T2_cline_model, 
+                  xlim=c(0,2000),
+                  ylim=c(0,2000),
+                  parameters=params2,
+                  system="two.dim",
+                  state.names=c("Th1","Th2"),
+                  add=FALSE)
+        nullclines(T1T2_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,2000),
+                   parameters=params2,
+                   col=c(1,2),
+                   lwd=2,
+                   state.names=c("Th1","Th2"),
+                   add.legend=FALSE)
+        lines(out80low[1:i,c(2,3)], lwd=2, col='blue')
+        
+        plot(out[1:i,c(1,4)], type='l', lwd=2, xlab="Time", ylab="Parasites")
+    }}, video.name=paste0("movie",j,"_for_mathbio_talk.mp4"), other.opts = "-pix_fmt yuv420p -b 300k")
+  }
+}
 
-
-
-
+ 
+```
 
 
 
