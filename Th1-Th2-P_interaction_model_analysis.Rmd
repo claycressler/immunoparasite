@@ -841,14 +841,14 @@ par(mfcol=c(2,4))
 for (P in c(20,40,60,80)) {
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.95, c1=3, c2=2, bp=5, Kp=80, a=0.004)
 params2 <- c(params, P=P)
-flows <- flowField(T1T2_cline_model, 
+flowField(T1T2_cline_model, 
                    xlim=c(0,2500),
                    ylim=c(0,2500),
                    parameters=params2,
                    system="two.dim",
                    state.names=c("Th1","Th2"),
                    add=FALSE)
-clines <- nullclines(T1T2_cline_model, 
+nullclines(T1T2_cline_model, 
                      xlim=c(0,2500),
                      ylim=c(0,2500),
                      parameters=params2,
@@ -858,14 +858,14 @@ clines <- nullclines(T1T2_cline_model,
                      add.legend=FALSE)
 
 params3 <- c(params, T1=5*P)
-flows <- flowField(T2P_cline_model, 
+flowField(T2P_cline_model, 
                    xlim=c(0,2000),
                    ylim=c(-50,200),
                    parameters=params3,
                    system="two.dim",
                    state.names=c("Th2","P"),
                    add=FALSE)
-clines <- nullclines(T2P_cline_model, 
+nullclines(T2P_cline_model, 
                      xlim=c(0,2000),
                      ylim=c(-50,200),
                      parameters=params3,
@@ -1102,14 +1102,14 @@ params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10
 par(mfrow=c(2,3))
 for (P in seq(40,240,40)) {
 params2 <- c(params, P=P)
-flows <- flowField(T1T2_cline_model, 
+flowField(T1T2_cline_model, 
                    xlim=c(0,2500),
                    ylim=c(0,2500),
                    parameters=params2,
                    system="two.dim",
                    state.names=c("Th1","Th2"),
                    add=FALSE)
-clines <- nullclines(T1T2_cline_model, 
+nullclines(T1T2_cline_model, 
                      xlim=c(0,2500),
                      ylim=c(0,2500),
                      parameters=params2,
@@ -1135,14 +1135,14 @@ Putting the pictures together: from a low dose, the parasite biomass is increasi
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
 par(mfrow=c(1,2))
 params2 <- c(params, P=40)
-flows <- flowField(T1T2_cline_model, 
+flowField(T1T2_cline_model, 
                    xlim=c(0,2500),
                    ylim=c(0,2500),
                    parameters=params2,
                    system="two.dim",
                    state.names=c("Th1","Th2"),
                    add=FALSE)
-clines <- nullclines(T1T2_cline_model, 
+nullclines(T1T2_cline_model, 
                      xlim=c(0,2500),
                      ylim=c(0,2500),
                      parameters=params2,
@@ -1152,7 +1152,7 @@ clines <- nullclines(T1T2_cline_model,
                      add.legend=FALSE)
 
 params2 <- c(params, P=200)
-flows <- flowField(T1T2_cline_model, 
+flowField(T1T2_cline_model, 
                    xlim=c(0,2500),
                    ylim=c(0,2500),
                    parameters=params2,
@@ -1160,7 +1160,7 @@ flows <- flowField(T1T2_cline_model,
                    col="pink",
                    state.names=c("Th1","Th2"),
                    add=TRUE)
-clines <- nullclines(T1T2_cline_model, 
+nullclines(T1T2_cline_model, 
                      xlim=c(0,2500),
                      ylim=c(0,2500),
                      parameters=params2,
@@ -1276,6 +1276,34 @@ out10 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
 out20 <- ode(y=c(T1=800,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
 out40 <- ode(y=c(T1=800,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
 out80 <- ode(y=c(T1=800,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
+
+
+## Take these simulations and plot the configuration of the nullclines and how they change as the parasite and immune response grow
+
+params2 <- c(params, T1=800)
+flows <- flowField(T2P_cline_model, 
+                   xlim=c(0,2000),
+                   ylim=c(0,450),
+                   parameters=params2,
+                   system="two.dim",
+                   col="gray",
+                   state.names=c("Th2","P"),
+                   add=FALSE,
+                   cex.axis=1.5,
+                   cex.lab=1.5)
+clines <- nullclines(T2P_cline_model, 
+                     xlim=c(0,2000),
+                     ylim=c(0,450),
+                     parameters=params2,
+                     col=c(1,2),
+                     lwd=4,
+                     state.names=c("Th2","P"),
+                     points=500,
+                     add.legend=FALSE)
+
+
+
+
 ## Start balanced
 out10.2 <- ode(y=c(T1=500,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
 out20.2 <- ode(y=c(T1=500,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
@@ -1552,6 +1580,152 @@ lines(out80.6[,c("time","P")], lwd=4, col=gray(0.2))
 mtext(side=1, outer=TRUE, line=-1, "Time since infection")
 
 ```
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+full_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  C1 <- params["C1"]
+  C2 <- params["C2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+  P <- y[3]
+  
+  dT1 <- b1 + c1*P/(C1+P) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT1, dT2, dP))
+}
+
+T2P_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  C1 <- params["C1"]
+  C2 <- params["C2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  T1 <- params["T1"]
+  
+  T2 <- y[1]
+  P <- y[2]
+
+  dT2 <- b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+  dP <- bp*P*(1-P/Kp) - a*T2*P
+  
+  list(c(dT2, dP))
+}
+
+T1T2_cline_model = function(t, y, params) {
+  s1 <- params["s1"]
+  s2 <- params["s2"]
+  b1 <- params["b1"]
+  b2 <- params["b2"]
+  I12 <- params["I12"]
+  I21 <- params["I21"]
+  S1 <- params["S1"]
+  S2 <- params["S2"]
+  m <- params["m"]
+  c1 <- params["c1"]
+  c2 <- params["c2"]
+  C1 <- params["C1"]
+  C2 <- params["C2"]
+  bp <- params["bp"]
+  Kp <- params["Kp"]
+  a <- params["a"]
+  P <- params["P"]
+  
+  T1 <- y[1]
+  T2 <- y[2]
+
+  dT1 <- b1 + c1*P/(C1+P) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2) - m*T1
+  dT2 <- b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1) - m*T2
+
+  list(c(dT1, dT2))
+}
+
+library(deSolve)
+## Strong negative feedbacks
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=500, C1=50, C2=50, bp=4,Kp=300, a=0.006)
+## Start Th1 biased
+out10 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,50,0.1), full_model, params)
+out20 <- ode(y=c(T1=800,T2=500,P=20), times=seq(0,50,0.1), full_model, params)
+out40 <- ode(y=c(T1=800,T2=500,P=40), times=seq(0,50,0.1), full_model, params)
+out80 <- ode(y=c(T1=800,T2=500,P=80), times=seq(0,50,0.1), full_model, params)
+## Start Th2 biased
+out10.2 <- ode(y=c(T1=500,T2=800,P=10), times=seq(0,50,0.1), full_model, params)
+out20.2 <- ode(y=c(T1=500,T2=800,P=20), times=seq(0,50,0.1), full_model, params)
+out40.2 <- ode(y=c(T1=500,T2=800,P=40), times=seq(0,50,0.1), full_model, params)
+out80.2 <- ode(y=c(T1=500,T2=800,P=80), times=seq(0,50,0.1), full_model, params)
+
+## Strong chronicity-promoting feedbacks
+params.2 = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=50, c2=130, C1=50, C2=50, bp=4,Kp=300, a=0.004)
+## Start Th1 biased
+out10.3 <- ode(y=c(T1=800,T2=500,P=10), times=seq(0,50,0.1), full_model, params.2)
+out20.3 <- ode(y=c(T1=800,T2=500,P=20), times=seq(0,50,0.1), full_model, params.2)
+out40.3 <- ode(y=c(T1=800,T2=500,P=40), times=seq(0,50,0.1), full_model, params.2)
+out80.3 <- ode(y=c(T1=800,T2=500,P=80), times=seq(0,50,0.1), full_model, params.2)
+## Start Th2 biased
+out10.4 <- ode(y=c(T1=500,T2=800,P=10), times=seq(0,50,0.1), full_model, params.2)
+out20.4 <- ode(y=c(T1=500,T2=800,P=20), times=seq(0,50,0.1), full_model, params.2)
+out40.4 <- ode(y=c(T1=500,T2=800,P=40), times=seq(0,50,0.1), full_model, params.2)
+out80.4 <- ode(y=c(T1=500,T2=800,P=80), times=seq(0,50,0.1), full_model, params.2)
+
+## Strong clearance-promoting feedbacks
+params.3 = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=700, c2=0, C1=50, C2=50, bp=4, Kp=250, a=0.004)
+## start Th1 biased
+out10.5 <- ode(y=c(T1=600,T2=400,P=10), times=seq(0,500,0.1), full_model, params.3)
+out20.5 <- ode(y=c(T1=600,T2=400,P=20), times=seq(0,50,0.1), full_model, params.3)
+out40.5 <- ode(y=c(T1=600,T2=400,P=40), times=seq(0,50,0.1), full_model, params.3)
+out80.5 <- ode(y=c(T1=600,T2=400,P=80), times=seq(0,50,0.1), full_model, params.3)
+## start Th2 biased
+out10.6 <- ode(y=c(T1=0,T2=800,P=10), times=seq(0,500,0.1), full_model, params.3)
+out20.6 <- ode(y=c(T1=0,T2=800,P=20), times=seq(0,50,0.1), full_model, params.3)
+out40.6 <- ode(y=c(T1=0,T2=800,P=40), times=seq(0,50,0.1), full_model, params.3)
+out80.6 <- ode(y=c(T1=0,T2=800,P=80), times=seq(0,50,0.1), full_model, params.3)
+
+## Make movies showing how the two nullcline configurations change as the system evolves
+
+
+
+
+
+
+
+
 
 
 ```{r, echo=FALSE, eval=FALSE}
