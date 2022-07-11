@@ -1130,7 +1130,7 @@ The full picture is shown by pairing the Th1-Th2 isoclines with the Th2-P isocli
 You can see that, from a low dose, the parasite biomass is initially increasing, whereas from a high dose, the parasite biomass is initially decreasing.
 Putting the pictures together: from a low dose, the parasite biomass is increasing and the Th1 response is increasing while the Th2 response is decreasing (due to the fact that the system starts with a Th1 bias that allows the Th1 response to suppress the Th2); at a high dose, the parasite bimoass is decreasing and the Th1 and Th2 response are both increasing (due to the fact that the parasite population is larger, which stimulates the Th2 response).
 
-```{r, fig.height=4, fig.width=4, fig.cap="Here are the isoclines for a low dose (black and red) and a high dose (blue and green) and initial Th1-Th2 densities where a low dose leads to a chronic infection but a high dose leads to clearance. The flows show that, from an initial low dose, the movement in the phase plane is towards increasing Th1-ness and decreasing Th2-ness (grey) whereas an initial high dose flows towards increasing Th1-ness and increasing Th2-ness."}
+```{r Andrea_fig, fig.height=8, fig.width=12, fig.cap="Here are the isoclines for a low dose (black and red) and a high dose (blue and green) and initial Th1-Th2 densities where a low dose leads to a chronic infection but a high dose leads to clearance. The flows show that, from an initial low dose, the movement in the phase plane is towards increasing Th1-ness and decreasing Th2-ness (grey) whereas an initial high dose flows towards increasing Th1-ness and increasing Th2-ness."}
 ## Here are the isoclines for a low dose (black and red) and a high dose (blue and green) and initial Th1-Th2 densities where a low dose leads to a chronic infection but a high dose leads to clearance. The flows show that, from an initial low dose, the movement in the phase plane is towards increasing Th1-ness and decreasing Th2-ness (grey) whereas an initial high dose flows towards increasing Th1-ness and increasing Th2-ness.
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
 par(mfrow=c(1,2))
@@ -1359,12 +1359,13 @@ dev.off()
 
 ```
 
-```{r grant_figure, fig.width=8, fig.height=5, units='in', res=450, fig.cap="Figure for grant proposal."}
+```{r grant_figure, fig.width=12, fig.height=9, units='in', res=450, fig.cap="Figure for grant proposal."}
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, b1=0.1, b2=0.1, I12=10000, I21=10000, m=0.9, c1=100, c2=130, C1=50, C2=50, bp=4, Kp=300, a=0.004)
 params2 <- c(params, T1=800)
 eq1 <- findEquilibrium(T2P_cline_model, y0=c(1200,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
 eq2 <- findEquilibrium(T2P_cline_model, y0=c(200,200), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
 eq3 <- findEquilibrium(T2P_cline_model, y0=c(700,0), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
+eq4 <- findEquilibrium(T2P_cline_model, y0=c(500,200), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
 
 par(mfcol=c(2,3), mar=c(5,5,0.5,0.5), oma=c(0,0,5,0))
 flows <- flowField(T2P_cline_model, 
@@ -1387,12 +1388,13 @@ clines <- nullclines(T2P_cline_model,
                      points=500,
                      add.legend=FALSE)
 lines(c(0,2000), c(0,0), col=2, lwd=4)
-legend(x='topleft', legend=c("Th2 nullclines", "P nullclines"), cex=1.25, lwd=3, col=c(1,2), bty='n')
+legend(x='topleft', legend=c("Th2 nullclines", "P nullclines"), cex=1.4, lwd=3, col=c(1,2), bty='n')
 text(x=2000, y=450, "A", cex=1.5, adj=0)
 mtext(side=3, line=0.5, "Dynamical Profile of\nImmune-Parasite Interaction", cex=1)
 points(eq1$ystar[1,1], eq1$ystar[2,1], pch=21, bg=1, cex=2.5)
 points(eq2$ystar[1,1], eq2$ystar[2,1], pch=21, bg=1, cex=2.5)
 points(eq3$ystar[1,1], eq3$ystar[2,1], cex=2.5)
+points(eq4$ystar[1,1], eq4$ystar[2,1], cex=2.5)
 
 params2 <- c(params, P=40)
 eq1 <- findEquilibrium(T1T2_cline_model, y0=c(1,1), parameters=params2, system="two.dim", plot.it=FALSE, summary=FALSE)
@@ -1423,7 +1425,7 @@ clines <- nullclines(T1T2_cline_model,
                      state.names=c("Th1 response","Th2 response"),
                      add.legend=FALSE,
                      cex.lab=1.5)
-legend(x='topleft', legend=c("Th1 nullclines", "Th2 nullclines"), cex=1, lwd=3, col=c(1,2), bty='n')
+legend(x='topleft', legend=c("Th1 nullclines", "Th2 nullclines"), cex=1.4, lwd=3, col=c(1,2), bty='n')
 text(x=2100, y=2100, "B", cex=1.5, adj=0)
 points(eq1$ystar[1,1], eq1$ystar[2,1], pch=21, bg=1, cex=2.5)
 points(eq2$ystar[1,1], eq2$ystar[2,1], pch=21, bg=1, cex=2.5)
@@ -2469,7 +2471,7 @@ lines(out60.2[,c(1,2)], lwd=3, col=gray(0.4))
 
 ```
 
-```{r grant_figure_4, fig.height=12, fig.width=12, units='in', fig.cap="Dose is 60 across all simulations. The first contrast shows a shift towards a chronic infection caused by weakening the negative feedbacks, as might be expected if the system shifts towards tolerance. The second shows a shift towards a chronic infection caused by strengthening the baseline level of Th1 stimulation, thereby increasing the initial Th1ness of the system. }
+```{r grant_figure_4, fig.height=3.5, fig.width=7.5, units='in', fig.cap="Dose is 60 across all simulations. The first contrast shows a shift towards a chronic infection caused by weakening the negative feedbacks, as might be expected if the system shifts towards tolerance. The second shows a shift towards a chronic infection caused by strengthening the baseline level of Th1 stimulation, thereby increasing the initial Th1ness of the system."}
 
 ## Three ways the system can shift towards acute
 
@@ -2490,21 +2492,23 @@ params = c(S1=1000, S2=1000, s1=2000, s2=1500, b1=0.1, b2=0.1, I12=10000, I21=10
 out4 <- ode(y=c(T1=1,T2=1,P=60), times=seq(0,40,0.1), full_model, params)
 
 
-par(mfrow=c(1,3), mar=c(2.5,5,1,1), oma=rep(0.5,4))
+par(mfrow=c(1,3), mar=c(2.5,5,1,1), oma=c(2.5,0,0,0))
 plot(out1[,c(1,4)], type='l', lwd=3, lty=2, col=gray(0.8), xlab='', ylab='', ylim=c(0,300), cex.axis=1.5)
-mtext(side=2, line=3.5, "Parasite biomass", cex=1.5)
+mtext(side=2, line=3.25, "Parasite biomass", cex=1.5)
+mtext(side=1, line=0.25, outer=T, "Days post-infection", cex=1.5)
 #lines(out2[,c(1,4)], lwd=3, col=gray(0.6))
 lines(out3[,c(1,4)], lwd=3, col=gray(0.4))
 lines(out4[,c(1,4)], lwd=3, col=gray(0))
+legend(x='topright', c("Baseline","Increase Th1ness","Weaken clearance"), fill=c(gray(1),gray(0.4),gray(0)), bty='n', cex=1.2)
 
 plot(out1[,c(1,3)], type='l', lwd=3, lty=2, col=gray(0.8), xlab='', ylab='', ylim=c(0,1600), cex.axis=1.5)
-mtext(side=2, line=3.5, "Th2 response", cex=1.5)
+mtext(side=2, line=3.25, "Th2 response", cex=1.5)
 #lines(out2[,c(1,3)], lwd=3, col=gray(0.6))
 lines(out3[,c(1,3)], lwd=3, col=gray(0.4))
 lines(out4[,c(1,3)], lwd=3, col=gray(0))
 
 plot(out1[,c(1,2)], type='l', lwd=3, lty=2, col=gray(0.8), xlab='', ylab='', ylim=c(0,1800), cex.axis=1.5)
-mtext(side=2, line=3.5, "Th1 response", cex=1.5)
+mtext(side=2, line=3.25, "Th1 response", cex=1.5)
 #lines(out2[,c(1,2)], lwd=3, col=gray(0.6))
 lines(out3[,c(1,2)], lwd=3, col=gray(0.4))
 lines(out4[,c(1,2)], lwd=3, col=gray(0))
