@@ -1,4 +1,13 @@
-gillespie_sim <- function(tmax, y0, params, fixedDose=FALSE, seed=NULL) {
+library(pryr)
+library(tidyverse)
+workspace.size <- function() {
+  ws <- sum(sapply(ls(envir=globalenv()), function(x)object_size(get(x))))
+  class(ws) <- "object_size"
+  ws
+}
+
+
+gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   if (!is.null(seed))
     set.seed(seed)
   
@@ -6,6 +15,8 @@ gillespie_sim <- function(tmax, y0, params, fixedDose=FALSE, seed=NULL) {
   c <- params["c"] ## contact rate between hosts
   v <- params["v"] ## virulence (per-capita mortality rate for infected hosts - I assume that parasite load does not determine virulence, but that virulence does determine parasite replication rate)
   v0 <- params["v0"] ## half-saturation constant scaling virulence into parasite replication rate
+  cv_v <- params["cv_v"] ## coefficient of variation in virulence (for evolving simulations)
+  fixedDose <- params["fixedDose"] ## Logical - determines whether dose is fixed or stochastic
   
   ## Within-host parameters
   s1 <- params["s1"] ## self-stimulation of Th1
@@ -21,47 +32,75 @@ gillespie_sim <- function(tmax, y0, params, fixedDose=FALSE, seed=NULL) {
   c2 <- params["c2"] ## Th2 production due to parasites
   C1 <- params["C1"] ## Th1 production half-saturation constant
   C2 <- params["C2"] ## Th2 production half-saturation constant
-  bp <- params["bp"] * v/(v0+v) ## parasite maximum birth rate parameter (depends on virulence)
+  bp <- params["bp"] ## parasite maximum birth rate parameter
   Kp <- params["Kp"] ## parasite carrying capacity
   a <- params["a"] ## immune killing rate
-  dose <- params["dose"] ## initial dose (if dose is fixed)
   
-  ## Every individual in the host population has values of Th1, Th2, and P.
+  ## Every individual in the host population has values of Th1, Th2, P, and v (if infected [P>0]).
   ## These values determine when/if the host recovers from its infection.
   ## They also determine the immune state of the host when it gets infected.
   S <- y0[1]
   I <- y0[2]
+  R <- 0 ## number of recoveries
   Host <- vector(mode='list', length=S+I)
-  for(i in 1:S) Host[[i]] <- c(0,0,0) ## susceptible host initial state 
-  for(i in (S+1):(S+I)) Host[[i]] <- c(0,0,dose) ## infected host initial state
- 
+  for(i in 1:S) Host[[i]] <- c(0,0,0,0) ## susceptible host initial state 
+  for(i in (S+1):(S+I)) {
+    ## set virulences of initially infected hosts
+    sd_v <- cv_v * v
+    mu <- log(v^2 / sqrt(sd_v^2+v^2))
+    sigma <- sqrt(log(cv_v^2/v^2 + 1))
+    this_v <- rlnorm(1, meanlog=mu, sdlog=sigma)
+    ## set initial infected doses
+    if (fixedDose) ## if dose is fixed, it is 10% of the carrying capacity
+      this_dose <- Kp/10
+    else ## assume that dose is Poisson distributed (so variance=mean)
+      this_dose <- rpois(1, lambda=Kp/10)
+    Host[[i]] <- c(0,0,this_dose,this_v) ## infected host initial state
+  }
+  
   ## time 
   t <- 0
   
-  ## set up storage for susceptible hosts, infected hosts, and mean and variance in virulence
-  out <- array(0, dim=c(1e6, 5))
-  colnames(out) <- c("Time", "S", "I", "meanV", "varV")
-  out[1,] <- c(t, S, I, v, 0)
-  i <- 2
-  
+  ## set up storage for susceptible hosts, infected hosts, no. recoveries, and mean virulence
+  ## store every 0.1
+  out <- array(0, dim=c(length(seq(0,tmax,0.1))-1, 5))
+  compute_times <- rep(NA,length(seq(0,tmax,0.1))-1)
+  i <- 1
+  t1 <- Sys.time()
   while (t < tmax) {
-
-    ## extract the current T1, T2, and P values for the host population
+    
+    ## extract the current T1, T2, P, and v values for the host population
     T1 <- lapply(Host, function(i) i[1]) %>% unlist
     T2 <- lapply(Host, function(i) i[2]) %>% unlist
     P <- lapply(Host, function(i) i[3]) %>% unlist
+    v <- lapply(Host, function(i) i[4]) %>% unlist
+    
+    ## extract the current S and I state for the population (R is tracked below)
+    S <- sum(P==0)
+    I <- sum(P>0)
+    
+    ## if it's time, store the current system state (t, S, I, R mean virulence) 
+    if(t >= seq(0,tmax,0.1)[i]) {
+      t2 <- Sys.time()
+      compute_times[i] <- t2-t1
+      ## check for memory "leaks" (dramatic increases in memory usage over runtime)
+      print(workspace.size())
+      out[i,] <- c(t, S, I, R, mean(v[v>0]))
+      i <- i+1
+      t1 <- t2
+    }
     
     ## compute within-host event rates
-    ## to prevent the system from getting "stuck", self-stimulation/cross-inhibition turns "off" when the parasite goes extinct, reflecting the action of Treg cells
+    ## to allow the immune system to "reset" after clearance, self-stimulation/cross-inhibition turns "off" when the parasite goes extinct, reflecting the action of Treg cells
     prod1 <- sapply(P, function(p) ifelse(p > 0, b1 + c1*p/(C1+p) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2), b1))
-    prod2 <- sapply(P, function(p) ifelse(p > 0, b1 + c1*p/(C1+p) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2), b1))
+    prod2 <- sapply(P, function(p) ifelse(p > 0, b2 + c2*p/(C2+p) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1), b2))
     death1 <- m*T1
     death2 <- m*T2
-    birthP <- bp*P*(1-P/Kp)
+    birthP <- bp*v/(v0+v)*P*(1-P/Kp)
     deathP <- a*T2*P
+    deathI <- v
     contact <- c*S*I
-    deathI <- v*I
-    rates <- c(prod1, prod2, death1, death2, birthP, deathP, contact, deathI)
+    rates <- c(prod1, prod2, death1, death2, birthP, deathP, deathI, contact)
     
     ## what time does the event happen?
     dt <- rexp(1, rate=sum(rates))
@@ -76,77 +115,76 @@ gillespie_sim <- function(tmax, y0, params, fixedDose=FALSE, seed=NULL) {
     rand <- runif(1)
     
     event <- 1 + sum(rand > wheel)
+    
     ## If event is 1:(S+I), a new Th1 cell is produced
     if (event%in%seq(1,S+I)) {
       ind <- event
-      Host[[ind]][1] <- Host[[event]][1]+1
+      Host[[ind]][1] <- Host[[ind]][1]+1
     }
     ## If event is (S+I+1):(2*(S+I)), a new Th1 cell is produced
     if (event%in%seq(S+I+1,2*(S+I))) {
       ind <- event-(S+I)
-      Host[[ind]][2] <- Host[[event]][2]+1
+      Host[[ind]][2] <- Host[[ind]][2]+1
     }
     ## If event is (2*(S+I)+1):(3*(S+I)), a Th1 cell is lost
     if (event%in%seq(2*(S+I)+1,3*(S+I))) {
       ind <- event-2*(S+I)
-      Host[[ind]][1] <- Host[[event]][1]-1
+      Host[[ind]][1] <- Host[[ind]][1]-1
     }  
     ## If event is (3*(S+I)+1):(4*(S+I)), a Th2 cell is lost
     if (event%in%seq(3*(S+I)+1,4*(S+I))) {
       ind <- event-3*(S+I)
-      Host[[ind]][2] <- Host[[event]][2]-1
+      Host[[ind]][2] <- Host[[ind]][2]-1
     }  
     ## If event is (4*(S+I)+1):(5*(S+I)), a parasite is born
     if (event%in%seq(4*(S+I)+1,5*(S+I))) {
       ind <- event-4*(S+I)
-      Host[[ind]][3] <- Host[[event]][3]+1
+      Host[[ind]][3] <- Host[[ind]][3]+1
     }
     ## If event is (5*(S+I)+1):(6*(S+I)), a parasite is killed
     if (event%in%seq(5*(S+I)+1,6*(S+I))) {
       ind <- event-5*(S+I)
-      Host[[ind]][3] <- Host[[event]][3]-1
+      Host[[ind]][3] <- Host[[ind]][3]-1
+      ## if P = 0 now, set v = 0 so host can no longer die of infection and increment the no. of recoveries
+      if(Host[[ind]][3]==0) {
+        Host[[ind]][4] <- 0
+        R <- R + 1
+      }
     }
-    ## If event is 6*(S+I)+1, there was a contact between a susceptible and an infected host
-    if (event==(6*(S+I)+1)) {
+    ## If event is (6*(S+I)+1):(7*(S+I)), a host dies of infection
+    if (event%in%seq(6*(S+I)+1,7*(S+I))) {
+      ind <- event-6*(S+I)
+      Host <- Host[-ind]
+    }
+    ## If event is 7*(S+I)+1, there was a contact between a susceptible and an infected host
+    if (event==(7*(S+I)+1)) {
       ## choose the susceptible and infected host at random
       Sinds <- which(unlist(lapply(Host, function(h) h[3]))==0)
       Iinds <- which(unlist(lapply(Host, function(h) h[3]))>0)
       whichS <- Sinds[sample(1:length(Sinds), 1)]
       whichI <- Iinds[sample(1:length(Iinds), 1)]
-      
+      ## What is the dose and virulence of the new infection?
       ## infectious dose can be fixed or based on current infection load
       if (fixedDose)
-        Host[[whichS]][3] <- dose
-      else {
-        thisP <- Host[[whichI]][3]/10
-        ## assume that the mean and sd are the same (big assumption!)
-        mu <- log(thisP^2 / sqrt(thisP^2+thisP^2))
-        sigma <- sqrt(log(2))
-        Host[[whichS]][3] <- ceiling(rlnorm(1, meanlog=mu, sdlog=sigma)))
-      }
+        Host[[whichS]][3] <- Kp/10
+      else ## dose is Poisson distributed based on the current infection load of the infecting individual
+        Host[[whichS]][3] <- rpois(1, lambda=Host[[whichI]][3]/10)
+      ## virulence also depends on the virulence of the infecting individual
+      this_v <- Host[[whichI]][4]
+      sd_v <- cv_v * this_v
+      mu <- log(this_v^2 / sqrt(sd_v^2+this_v^2))
+      sigma <- sqrt(log(cv_v^2/this_v^2 + 1))
+      Host[[whichS]][4] <- rlnorm(1, meanlog=mu, sdlog=sigma)
     }
-    ## If event is 6*(S+I)+2, an infected host dies
-    if (event==(6*(S+I)+2)) {
-      ## choose the infected host at random
-      Iinds <- which(unlist(lapply(Host, function(h) h[3]))>0)
-      whichI <- Iinds[sample(1:length(Iinds), 1)]
-      Host <- Host[-whichI]
-    }
-    
-     out[i,] <- c(t, T1, T2, P)
-    
-    i <- i + 1
-    #print(out[i,])
-    if (i > nrow(out)) ## add more rows
-      out <- rbind(out, array(0, dim=c(1e6, 4)))
-  }
-  out <- out[1:(i-1),]
+   }
   return(out)
 }
 
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, 
            b1=0, b2=0, I12=10000, I21=10000, 
            m=0.9, c1=50, c2=130, C1=50, C2=50, 
-           bp=4,Kp=300, a=0.004, dose=30,
-           c=1e-3, v=1e-4, v0=1e-5)
-
+           bp=4,Kp=300, a=0.004, 
+           c=1e-3, v=1e-2, v0=1e-3, cv_v=0.5,
+           fixedDose=FALSE)
+y0 <- c(495,5)
+tmax <- 20
