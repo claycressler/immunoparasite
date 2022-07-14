@@ -1,5 +1,6 @@
 library(pryr)
 library(tidyverse)
+
 workspace.size <- function() {
   ws <- sum(sapply(ls(envir=globalenv()), function(x)object_size(get(x))))
   class(ws) <- "object_size"
@@ -7,7 +8,7 @@ workspace.size <- function() {
 }
 
 
-gillespie_sim <- function(tmax, y0, params, seed=NULL) {
+nested_modelR <- function(params, seed=NULL, fixedDose=FALSE) {
   if (!is.null(seed))
     set.seed(seed)
   
@@ -16,7 +17,6 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   v <- params["v"] ## virulence (per-capita mortality rate for infected hosts - I assume that parasite load does not determine virulence, but that virulence does determine parasite replication rate)
   v0 <- params["v0"] ## half-saturation constant scaling virulence into parasite replication rate
   cv_v <- params["cv_v"] ## coefficient of variation in virulence (for evolving simulations)
-  fixedDose <- params["fixedDose"] ## Logical - determines whether dose is fixed or stochastic
   
   ## Within-host parameters
   s1 <- params["s1"] ## self-stimulation of Th1
@@ -36,14 +36,17 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   Kp <- params["Kp"] ## parasite carrying capacity
   a <- params["a"] ## immune killing rate
   
+  ## simulation parameters
+  S <- params["S0"]
+  I <- params["I0"]
+  R <- 0 ## number of recoveries
+  tmax <- params["tmax"]
+  
   ## Every individual in the host population has values of Th1, Th2, P, and v (if infected [P>0]).
   ## These values determine when/if the host recovers from its infection.
   ## They also determine the immune state of the host when it gets infected.
-  S <- y0[1]
-  I <- y0[2]
-  R <- 0 ## number of recoveries
   Host <- vector(mode='list', length=S+I)
-  for(i in 1:S) Host[[i]] <- c(0,0,0,0) ## susceptible host initial state 
+  for(i in 1:S) Host[[i]] <- c(0,0,0,0,i) ## susceptible host initial state 
   for(i in (S+1):(S+I)) {
     ## set virulences of initially infected hosts
     sd_v <- cv_v * v
@@ -55,7 +58,7 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
       this_dose <- Kp/10
     else ## assume that dose is Poisson distributed (so variance=mean)
       this_dose <- rpois(1, lambda=Kp/10)
-    Host[[i]] <- c(0,0,this_dose,this_v) ## infected host initial state
+    Host[[i]] <- c(0,0,this_dose,this_v,i) ## infected host initial state
   }
   
   ## time 
@@ -63,10 +66,9 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
   
   ## set up storage for susceptible hosts, infected hosts, no. recoveries, and mean virulence
   ## store every 0.1
-  out <- array(0, dim=c(length(seq(0,tmax,0.1))-1, 5))
-  compute_times <- rep(NA,length(seq(0,tmax,0.1))-1)
+  Popn <- array(0, dim=c(length(seq(0,tmax,0.1))-1, 5))
+  HostState <- vector(mode='list', length=nrow(Popn))
   i <- 1
-  t1 <- Sys.time()
   while (t < tmax) {
     
     ## extract the current T1, T2, P, and v values for the host population
@@ -81,19 +83,18 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
     
     ## if it's time, store the current system state (t, S, I, R mean virulence) 
     if(t >= seq(0,tmax,0.1)[i]) {
-      t2 <- Sys.time()
-      compute_times[i] <- t2-t1
       ## check for memory "leaks" (dramatic increases in memory usage over runtime)
-      print(workspace.size())
-      out[i,] <- c(t, S, I, R, mean(v[v>0]))
+      ##print(workspace.size())
+      Popn[i,] <- c(t, S, I, R, mean(v[v>0]))
+      HostState[[i]] <- do.call("rbind.data.frame", Host)
+      colnames(HostState[[i]]) <- c("T1","T2","P","v")
       i <- i+1
-      t1 <- t2
     }
     
     ## compute within-host event rates
     ## to allow the immune system to "reset" after clearance, self-stimulation/cross-inhibition turns "off" when the parasite goes extinct, reflecting the action of Treg cells
-    prod1 <- sapply(P, function(p) ifelse(p > 0, b1 + c1*p/(C1+p) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2), b1))
-    prod2 <- sapply(P, function(p) ifelse(p > 0, b2 + c2*p/(C2+p) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1), b2))
+    prod1 <- ifelse(P > 0, b1 + c1*P/(C1+P) + s1*T1^2/(S1^2+T1^2) * I12/(I12+T2), b1)
+    prod2 <- ifelse(P > 0, b2 + c2*P/(C2+P) + s2*T2^2/(S2^2+T2^2) * I21/(I21+T1), b2)
     death1 <- m*T1
     death2 <- m*T2
     birthP <- bp*v/(v0+v)*P*(1-P/Kp)
@@ -176,15 +177,6 @@ gillespie_sim <- function(tmax, y0, params, seed=NULL) {
       sigma <- sqrt(log(cv_v^2/this_v^2 + 1))
       Host[[whichS]][4] <- rlnorm(1, meanlog=mu, sdlog=sigma)
     }
-   }
-  return(out)
+  }
+  return(list(HostState,Popn))
 }
-
-params = c(S1=1000, S2=1000, s1=2000, s2=2000, 
-           b1=0, b2=0, I12=10000, I21=10000, 
-           m=0.9, c1=50, c2=130, C1=50, C2=50, 
-           bp=4,Kp=300, a=0.004, 
-           c=1e-3, v=1e-2, v0=1e-3, cv_v=0.5,
-           fixedDose=FALSE)
-y0 <- c(495,5)
-tmax <- 20
