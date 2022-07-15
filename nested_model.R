@@ -35,11 +35,15 @@ nested_modelR <- function(params, seed=NULL, fixedDose=FALSE) {
   bp <- params["bp"] ## parasite maximum birth rate parameter
   Kp <- params["Kp"] ## parasite carrying capacity
   a <- params["a"] ## immune killing rate
+  b <- params["b"] ## host birth rate
+  K <- params["K"] ## host carrying capacity
   
   ## simulation parameters
   S <- params["S0"]
   I <- params["I0"]
   R <- 0 ## number of recoveries
+  Th1 <- params["Th1"]
+  Th2 <- params["Th2"]
   tmax <- params["tmax"]
   
   ## Every individual in the host population has values of Th1, Th2, P, and v (if infected [P>0]).
@@ -58,7 +62,7 @@ nested_modelR <- function(params, seed=NULL, fixedDose=FALSE) {
       this_dose <- Kp/10
     else ## assume that dose is Poisson distributed (so variance=mean)
       this_dose <- rpois(1, lambda=Kp/10)
-    Host[[i]] <- c(0,0,this_dose,this_v,i) ## infected host initial state
+    Host[[i]] <- c(Th1,Th2,this_dose,this_v,i) ## infected host initial state
   }
   
   ## time 
@@ -76,10 +80,6 @@ nested_modelR <- function(params, seed=NULL, fixedDose=FALSE) {
     T2 <- lapply(Host, function(i) i[2]) %>% unlist
     P <- lapply(Host, function(i) i[3]) %>% unlist
     v <- lapply(Host, function(i) i[4]) %>% unlist
-    
-    ## extract the current S and I state for the population (R is tracked below)
-    S <- sum(P==0)
-    I <- sum(P>0)
     
     ## if it's time, store the current system state (t, S, I, R mean virulence) 
     if(t >= seq(0,tmax,0.1)[i]) {
@@ -100,9 +100,9 @@ nested_modelR <- function(params, seed=NULL, fixedDose=FALSE) {
     birthP <- bp*v/(v0+v)*P*(1-P/Kp)
     deathP <- a*T2*P
     deathI <- v
+    birthH <- b*(S+I)*(1-(S+I)/K)
     contact <- c*S*I
-    rates <- c(prod1, prod2, death1, death2, birthP, deathP, deathI, contact)
-    
+    rates <- c(prod1, prod2, death1, death2, birthP, deathP, deathI, birthH, contact)
     ## what time does the event happen?
     dt <- rexp(1, rate=sum(rates))
     
@@ -150,20 +150,34 @@ nested_modelR <- function(params, seed=NULL, fixedDose=FALSE) {
       if(Host[[ind]][3]==0) {
         Host[[ind]][4] <- 0
         R <- R + 1
+        I <- I - 1
+        S <- S + 1
       }
     }
     ## If event is (6*(S+I)+1):(7*(S+I)), a host dies of infection
     if (event%in%seq(6*(S+I)+1,7*(S+I))) {
       ind <- event-6*(S+I)
       Host <- Host[-ind]
+      I <- I - 1
     }
-    ## If event is 7*(S+I)+1, there was a contact between a susceptible and an infected host
+    ## If event is 7*(S+I)+1, there was a host birth
     if (event==(7*(S+I)+1)) {
+      Host[[length(Host)+1]] <- c(0,0,0,0,max(unlist(lapply(Host, function(i) i[5])))+1)
+      S <- S + 1
+     
+    }
+    ## If event is 7*(S+I)+2, there was a contact between a susceptible and an infected host
+    if (event==(7*(S+I)+2)) {
       ## choose the susceptible and infected host at random
       Sinds <- which(unlist(lapply(Host, function(h) h[3]))==0)
       Iinds <- which(unlist(lapply(Host, function(h) h[3]))>0)
       whichS <- Sinds[sample(1:length(Sinds), 1)]
       whichI <- Iinds[sample(1:length(Iinds), 1)]
+      
+      ## set the initial immune state at time of infection
+      Host[[whichS]][1] <- Th1
+      Host[[whichS]][2] <- Th2
+      
       ## What is the dose and virulence of the new infection?
       ## infectious dose can be fixed or based on current infection load
       if (fixedDose)
