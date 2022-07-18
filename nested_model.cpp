@@ -58,6 +58,7 @@ List nested_modelC(NumericVector params) {
   int D = 0; // initial number of deaths
   double Th1 = params[25]; // initial Th1 cells in a newly-infected host
   double Th2 = params[26]; // initial Th2 cells in a newly-infected host
+  double timestep = params[27]; // how frequently to record system information
   
   // Set up the host population as a matrix, since the total number of hosts cannot grow
   NumericMatrix Hosts(S+I, 5);
@@ -84,12 +85,12 @@ List nested_modelC(NumericVector params) {
   double t = 0.0; 
   
   // initialize storage for population statistics (no. susceptible, infected, recoveries, deaths, mean virulence)
-  NumericMatrix Popn(tmax * 10 + 1, 6);
+  NumericMatrix Popn(tmax * (1/timestep) + 1, 6);
   NumericVector ones = rep(1.0,Popn.nrow());
   ones(0) = 0.0;
   NumericVector times(ones.length());
   std::partial_sum(ones.begin(), ones.end(), times.begin());
-  times = times/10;
+  times = times/(1/timestep);
   Popn(_,0) = times;
   int tIter = 0;
   // initialize storage for the states of the individual hosts
@@ -114,7 +115,7 @@ List nested_modelC(NumericVector params) {
       Popn(tIter, 2) = I;
       Popn(tIter, 3) = R;
       Popn(tIter, 4) = D;
-      Popn(tIter, 5) = mean(V);
+      Popn(tIter, 5) = std::accumulate(V.begin(), V.end(), 0.0)/I;
       HostState(tIter) = clone(Hosts);
       tIter += 1;
     }
@@ -265,9 +266,9 @@ List nested_modelC(NumericVector params) {
         double mu = log(pow(Hosts(Iind,3),2.0) / sqrt(pow(vSD,2.0) + pow(Hosts(Iind,3),2.0)));
         double sigma = sqrt(log(pow(vSD,2.0) / pow(Hosts(Iind,3),2.0) + 1));
         Hosts(Sind,3) = rlnorm(1, mu, sigma)[0];
+        S -= 1;
+        I += 1;
       }
-      S -= 1;
-      I += 1;
     }
     // get the current states for all hosts
     T1 = Hosts(_,0);
@@ -280,7 +281,7 @@ List nested_modelC(NumericVector params) {
   Popn(tIter, 2) = I;
   Popn(tIter, 3) = R;
   Popn(tIter, 4) = D;
-  Popn(tIter, 5) = mean(V);
+  Popn(tIter, 5) = std::accumulate(V.begin(), V.end(), 0.0)/I;;
   HostState[tIter] = Hosts;
   
   // return a list
