@@ -1,70 +1,80 @@
 setwd("~/immunoparasite")
 library(Rcpp)
 library(parallel)
-sourceCpp("nested_model.cpp")
-source("nested_model.R")
-source("within_host_model.R")
+## this is the version of the model where initial Th1 and Th2 are fixed
+## based on 'exploring_within-host_dynamics.R', I know that for a fixed Th2ness (e.g., Th1=700, Th2=500)
+## changing dose and bp will alter the dynamics. In particular, there is only a narrow range of bp values
+## for which dose has a variable affect on infection outcome. For low or high bp, infections are always chronic;
+## for moderate bp they can be variable or always acute (which is kind of crazy, actually, and is 
+## something I need to explore in much more detail with a bifurcation diagram.
+sourceCpp("nested_model_fixed_Th2.cpp")
 
+## this is the version of the model where initial Th2ness varies from 400-700, with totalT fixed at 1200
+sourceCpp("nested_model_vary_Th2.cpp")
+
+## Based on 'exploring_within-host_dynamics.R', I know that all infections will become
+## chronic at bp=8. Let's allow that to be the maximum possible bp, but set the initial 
+## virulence so that the realized bp=4 (e.g., v=v0, since realized bp is bp*v/(v+v0))
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, 
            b1=0.1, b2=0.1, I12=10000, I21=10000, 
            m=0.9, c1=50, c2=130, C1=50, C2=50, 
-           bp=4, Kp=300, a=0.004, 
+           bp=8, Kp=300, a=0.004, 
            b=1e-1, K=100, 
-           c=1e-2, v=1e-3, v0=1e-3, cv_v=0.5,
-           tmax=10, S0=10, I0=5,
-           Th1=800,Th2=500)
+           c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
+           tmax=10, S0=95, I0=5,
+           Th1=700,Th2=500,timestep=1)
+out <- nested_model_fixed_Th2(params)
+out2 <- nested_model_vary_Th2(params)
 
-## What are the deterministic dynamics of the within-host model if everyone starts at (T1=0,T2=0)?
-out <- lapply(seq(10,100,10), function(p) ode(y=c(T1=0,T2=0,P=p), times=seq(0,50,0.1), within_host_model, params))
-## Infections are always chronic
-lapply(out, function(o) o[501,])
+params["tmax"] <- 400
+tIn <- Sys.time()
+mclapply(1:50, 
+         function(x) out = nested_model_vary_Th2(params),
+         mc.cores=10) -> out
+tOut <- Sys.time()
+print(tOut-tIn)
+saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome.RDS")
 
-## okay, what if you assume a much higher initial values of T1 and T2?
-out <- lapply(seq(10,100,10), function(p) ode(y=c(T1=800,T2=500,P=p), times=seq(0,50,0.1), within_host_model, params))
-## Here you get a chronic infection if dose is 10 or 20, and an acute infection if dose is 30 or larger
-lapply(out, function(o) o[501,])
+tIn <- Sys.time()
+mclapply(1:50, 
+         function(x) out = nested_model_fixed_Th2(params),
+         mc.cores=10) -> out
+tOut <- Sys.time()
+print(tOut-tIn)
+saveRDS(out, file="Nested_model_variable_dose_fixed_Th2_variable_outcome.RDS")
 
-## What about an initial dose of 30 exactly? What do the dynamics look like?
-det = ode(y=c(T1=800,T2=500,P=30), times=seq(0,500,0.1), within_host_model, params)
-#plot(det[,c(1,4)], type='l') ## should see an initial rise, and then squashed!
-
-## what about here?
-out <- lapply(seq(10,100,10), function(p) ode(y=c(T1=500,T2=800,P=p), times=seq(0,50,0.1), within_host_model, params))
-## Infections are always acute
-lapply(out, function(o) o[501,])
-
-o1 = ode(y=c(T1=500,T2=800,P=100), times=seq(0,50,0.1), within_host_model, params)
-
-## Set up the nested model such that we expect variability in infection duration based on the infecting dose 
+## modify fixed initial Th2ness so that infections are always chronic
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, 
            b1=0.1, b2=0.1, I12=10000, I21=10000, 
            m=0.9, c1=50, c2=130, C1=50, C2=50, 
-           bp=4, Kp=300, a=0.004, 
+           bp=8, Kp=300, a=0.004, 
            b=1e-1, K=100, 
-           c=3e-3, v=2e-4, v0=1e-5, cv_v=0.5,
-           tmax=400, S0=45, I0=5,
+           c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
+           tmax=400, S0=95, I0=5,
            Th1=0,Th2=0,timestep=1)
 tIn <- Sys.time()
 mclapply(1:50, 
-         function(x) out = nested_modelC(params),
+         function(x) out = nested_model_fixed_Th2(params),
          mc.cores=10) -> out
 tOut <- Sys.time()
 print(tOut-tIn)
-saveRDS(out, file="Nested_model_out_chronic_outcome.RDS")
+saveRDS(out, file="Nested_model_variable_dose_fixed_Th2_chronic_outcome.RDS")
 
+## modify fixed initial Th2ness so that infections are always acute (unless bp gets very large)
 params = c(S1=1000, S2=1000, s1=2000, s2=2000, 
            b1=0.1, b2=0.1, I12=10000, I21=10000, 
            m=0.9, c1=50, c2=130, C1=50, C2=50, 
-           bp=4, Kp=300, a=0.004, 
+           bp=8, Kp=300, a=0.004, 
            b=1e-1, K=100, 
-           c=3e-3, v=2e-4, v0=1e-5, cv_v=0.5,
-           tmax=400, S0=45, I0=5,
-           Th1=800,Th2=500,timestep=1)
+           c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
+           tmax=400, S0=95, I0=5,
+           Th1=500,Th2=700,timestep=1)
 tIn <- Sys.time()
-mclapply(1:20, 
-         function(x) out = nested_modelC(params),
+mclapply(1:50, 
+         function(x) out = nested_model_fixed_Th2(params),
          mc.cores=10) -> out
 tOut <- Sys.time()
 print(tOut-tIn)
-saveRDS(out, file="Nested_model_out_variable_outcome.RDS")
+saveRDS(out, file="Nested_model_variable_dose_fixed_Th2_acute_outcome.RDS")
+
 
