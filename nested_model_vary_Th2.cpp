@@ -56,9 +56,10 @@ List nested_model_vary_Th2(NumericVector params) {
   int I = params[24]; // initial number of infected hosts
   int R = 0; // initial number of recoveries
   int D = 0; // initial number of deaths
-  //double Th1 = params[25]; // initial Th1 cells in a newly-infected host (IGNORED)
-  double Th2 = params[26]; // initial Th2 cells in a newly-infected host (IGNORED)
+  double minTh2 = params[25]; // minimum number of Th2 cells in initially infected host
+  double maxTh2 = params[26]; // maximum number of Th2 cells in initially infected host
   double timestep = params[27]; // how frequently to record system information
+  double Th2; 
   
   // Set up the host population as a matrix, since the total number of hosts cannot grow
   NumericMatrix Hosts(S+I, 5);
@@ -70,7 +71,7 @@ List nested_model_vary_Th2(NumericVector params) {
     Hosts(i,4) = i; // individual ID for tracking through time
   }
   for (int i=S; i < S+I; i++) { // set the initial state of the susceptible hosts
-    Th2 = round(runif(1,400,700)[0]); // draw initial Th2ness from a uniform distribution 
+    Th2 = round(runif(1,minTh2,maxTh2)[0]); // draw initial Th2ness from a uniform distribution 
     Hosts(i,0) = 1200-Th2; // initial Th1 
     Hosts(i,1) = Th2; // initial Th2
     Hosts(i,2) = rpois(1, Kp/10)[0]; // initial P is drawn from a Poisson distribution
@@ -266,7 +267,7 @@ List nested_model_vary_Th2(NumericVector params) {
       // if the initial dose is 0, don't set anything else - this individual escaped without an infection!
       if (Hosts(Sind,2) > 0.0) { // infection was successful
         // set the initial Th1 and Th2 state of the newly infected host
-        Th2 = round(runif(1,400,700)[0]); // draw initial Th2ness from a uniform distribution 
+        Th2 = round(runif(1,minTh2,maxTh2)[0]); // draw initial Th2ness from a uniform distribution 
         Hosts(Sind,0) = 1200-Th2;
         Hosts(Sind,1) = Th2;
         // set the virulence based on the traits of the infecting host

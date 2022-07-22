@@ -1,0 +1,446 @@
+---
+title: "Nested model epidemiological and evolutionary dynamics"
+output: bookdown::html_document2
+date: "2022-07-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      dev=c('png'),
+                      fig.path='nested_model_figures/')
+library(tidyverse)
+```
+
+# Model Setup
+In this document, I will compare the epidemiological and evolutionary dynamics of the stochastic, individual-based, nested model that includes immunological feedbacks.
+I will not recap the within-host immune-parasite interaction model, as that is done elsewhere, but I will lay out some of the details of the epidemiological model.
+The basic model is quite simple.
+Hosts give birth according to a simple density-dependent, logistic function.
+Both susceptible and infected hosts can reproduce (appropriate for the type of parasite we are modeling, which can sustain chronic infections), but all hosts are born susceptible.
+The contact process is also density-dependent; the deterministic model would be $c S I$, where $c$ is the contact rate per infected host.
+We assume a similar contact process here. 
+Infected hosts die from infection at a rate $v P$, where $v$ is the per-parasite exploitation rate and $P$ is the dynamic within-host parasite load.
+Note that I do not assume that $P$ affects the contact process.
+However, $P$ does affect the size of the infectious dose; I assume that the infectious dose is Poisson random variable with mean and variance equal to 10\% of the current parasite burden $P$.
+When an infection occurs, I draw the dose from a Poisson distribution; if the dose is equal to zero, then the infection fails. 
+I also assume that the per-parasite exploitation rate $v$ affects the maximum within-host replication rate, according to the function $\frac{b_{max} v}{v_0 + v}$. 
+Thus any potential transmission-virulence trade-off is built in mechanistically, and thus in a (potentially) more biologically plausible way.]
+
+**Interestingly, this sets up a situation where the immunological details will determine whether or not a transmission-virulence trade-off exists or not.**
+Specifically, if increasing dose makes a chronic infection more likely, then there is always a transmission benefit of increasing virulence.
+However, if increasing dose makes a chronic infection *less* likely, then increasing virulence only increases transmission to the extent that it makes it more likely that the infectious dose is non-zero.
+
+Stochasticity is incorporated by simulating the deterministic system using a Gillespie algorithm.
+Specifically, I compute the rates of all possible events:
+
+1. Production of Th1 or Th2 cells according to $b_i + c_i \frac{P}{C_i+P} + \frac{T_i^2}{S_i^2+T_i^2}\frac{I_{ij}}{I_{ij}+T_j}$;
+
+2. Loss of Th1 or Th2 cells according to $m T_i$;
+
+3. Parasite growth according to $b_{max} \frac{v}{v_0+v} P \left(1 - \frac{P}{K_P}\right)$; 
+
+4. Parasite loss according to $a T_2 P$; 
+
+5. Parasite-induced host death according to $v P$;
+
+6. Host birth according to $r (S+I) \left(1 - \frac{S+I}{K}\right)$;
+
+7. Infectious contact according to $c S I$.
+
+Note that for rates 1-6, there are as many rates to compute as there are infectious hosts, because e.g., the rate of Th1 cell production in host 1 will be different from host 2 because it had a different infectious dose, is at a different point in the infection timecourse, or has a different stochastic history of events affecting it.
+
+If a new infection occurs, a susceptible and infected host are chosen at random.
+The newly infected host has a dose that determines on infection load in the infecting host.
+The virulence of this new infection may differ from that of the infecting host; this allows evolution of virulence.
+Specifically, the virulence of the new infection is drawn from a lognormal distribution with mean equal to the virulence in the infecting host and a variance that is set by the user.
+The initial Th1 and Th2 state of the newly infected host is what I am varying across the simulations below.
+
+I consider four possible initial immune states, which I say define the "immunological landscape" for the parasite.
+
+1. All newly infected hosts are immunologically naive ($T_1=T_2=0$); this produces chronic infections regardless of the initial infecting dose.
+
+2. All newly infected hosts are Th2-biased ($T_1=500, T_2=700$); this produces acute infections regardless of the initial infecting dose.
+
+3. All newly infected hosts are Th1-biased ($T_1=700, T_2=500$); this produces chronic infections at low doses and acute infections at high doses, at least for the initial virulence (as virulence evolves, the initial immune states that give rise to outcomes that vary with dose change).
+
+4. Newly infected hosts have an immune state that is drawn from a uniform distribution; specifically, $T_2$ is drawn from a uniform distribution with min 400 and max 800, and $T_1 = 1200-T_2$. This produces variation in outcomes with dose regardless of the evolved value of $v$.
+
+Of course, there are infinite possibilities for how to set this up!
+
+# Epidemiological dynamics
+## Infections are always chronic
+We can first explore the epidemiological dynamics when all infections are expected to be chronic (case #1 above).
+```{r All-epi-dynamics-nested-model-variable-dose-fixed-Th2-chronic-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Number of infected hosts across 50 stochastic replicate simulations when all infected hosts start immunologically naive."}
+out2 <- readRDS("Nested_model_variable_dose_fixed_Th2_chronic_outcome.RDS")
+## Y axis limits
+ymax <- ceiling((lapply(out2, function(o) max(o[[2]][,3])) %>% unlist %>% max)/10)*10
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,ymax))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out2[[i]][[2]][,c(1,3)], col=ifelse(out2[[i]][[2]][401,3]>0,1,2))
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+```
+Unsurprisingly, all of the simulations quickly approach a state where almost every host is infected. 
+In fact, the equilibrium prevalence of infection is 0.99.
+Because of this, there is very little variation in outcomes from one simulation to another, at least when looking at the epidemiological dynamics.
+
+```{r Mean-epi-dynamics-nested-model-variable-dose-fixed-Th2-chronic-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Mean number of infected hosts, averaged across 50 stochastic replicates, when all infected hosts start immunologically naive. The equilibrium prevalence is given in the top right corner."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out2[[i]][[2]][,c(1,3)], col=gray(0.8))
+mean.I <- sapply(which(unlist(lapply(out2, function(o) o[[2]][401,3]>0))), function(i) out2[[i]][[2]][,3]) %>% apply(., 1, mean)
+lines(1:401, mean.I, lwd=2)
+mean.prev <- sapply(which(unlist(lapply(out2, function(o) o[[2]][401,3]>0))), function(i) out2[[i]][[2]][,3]/apply(out2[[i]][[2]][,2:3],1,sum)) %>% apply(., 1, mean)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+l = legend(x='topright', 
+       paste("Mean prevalence", round(mean(mean.prev[301:401]),2), sep=" "), 
+       bty='n', plot=FALSE)
+legend(x=l$rect$left, y=l$text$y-5, 
+       paste("Mean prevalence", round(mean(mean.prev[301:401]),2), sep=" "), 
+       bty='n', text.col=1)
+
+```
+
+## Infections are always acute
+If we instead assume that every newly infected host has a Th2-bias in its immune state, then infections will always be acute.
+I would predict that this should reduce infection prevalence, which it does, and that epidemic fade-outs should be common, which they are.
+
+```{r All-epi-dynamics-nested-model-variable-dose-fixed-Th2-acute-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Number of infected hosts across 50 stochastic replicate simulations when all infected hosts start with Th2-biased immunity. Red lines show replicates that eventually went extinct."}
+out1 <- readRDS("Nested_model_variable_dose_fixed_Th2_acute_outcome.RDS")
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out1[[i]][[2]][,c(1,3)], col=ifelse(out1[[i]][[2]][401,3]>0,1,2))
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+legend(x='topright', 
+       paste("Prob. extinct", sum(unlist(lapply(out1, function(o) o[[2]][401,3]==0)))/50, sep=" "), 
+       bty='n', text.col=2)
+```
+
+```{r Mean-epi-dynamics-nested-model-variable-dose-fixed-Th2-acute-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Mean number of infected hosts, averaged across 50 stochastic replicates, when all infected hosts start Th2-biased. The equilibrium prevalence is given in the top right corner."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out1[[i]][[2]][,c(1,3)], col=ifelse(out1[[i]][[2]][401,3]>0,gray(0.8),'lightpink'))
+mean.I <- sapply(which(unlist(lapply(out1, function(o) o[[2]][401,3]>0))), function(i) out1[[i]][[2]][,3]) %>% apply(., 1, mean)
+lines(1:401, mean.I, lwd=2)
+mean.prev <- sapply(which(unlist(lapply(out1, function(o) o[[2]][401,3]>0))), function(i) out1[[i]][[2]][,3]/apply(out1[[i]][[2]][,2:3],1,sum)) %>% apply(., 1, mean)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+legend(x='topright', 
+       paste("Mean prevalence", round(mean(mean.prev[301:401]),2), sep=" "), 
+       bty='n', text.col=1)
+```
+
+## Infection outcome depends on dose (at least initially)
+In this scenario, newly infected hosts start out Th1-biased, which creates dose-dependence in infection outcomes: if the initial dose is small, then infections are more likely to be chronic; if the initial dose is large, then infections are more likely to be acute.
+However, this only holds at the starting level of virulence.
+What I find is that, ultimately, the dynamics look much more like the dynamics when all infections were acute, although the equilibrium prevalence is lower.
+
+```{r All-epi-dynamics-nested-model-variable-dose-fixed-Th2-variable-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Number of infected hosts across 50 stochastic replicate simulations when all infected hosts start with Th1-biased immunity."}
+out3 <- readRDS("Nested_model_variable_dose_fixed_Th2_variable_outcome.RDS")
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out3[[i]][[2]][,c(1,3)], col=ifelse(out3[[i]][[2]][401,3]>0,1,2))
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+
+```
+
+```{r Mean-epi-dynamics-nested-model-variable-dose-fixed-Th2-variable-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Mean number of infected hosts, averaged across 50 stochastic replicates, when all infected hosts start Th1-biased. The equilibrium prevalence is given in the top right corner."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out3[[i]][[2]][,c(1,3)], col=ifelse(out3[[i]][[2]][401,3]>0,gray(0.8),'lightpink'))
+mean.I <- sapply(which(unlist(lapply(out3, function(o) o[[2]][401,3]>0))), function(i) out3[[i]][[2]][,3]) %>% apply(., 1, mean)
+lines(1:401, mean.I, lwd=2)
+mean.prev <- sapply(which(unlist(lapply(out3, function(o) o[[2]][401,3]>0))), function(i) out3[[i]][[2]][,3]/apply(out3[[i]][[2]][,2:3],1,sum)) %>% apply(., 1, mean)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+legend(x='topright', 
+       paste("Mean prevalence", round(mean(mean.prev[301:401]),2), sep=" "), 
+       bty='n', text.col=1)
+```
+
+The difference in prevalence can be attributed to the fact that recoveries are more common when the initial immune state is such that infection outcome is variable.
+
+```{r comparing-no-of-recoveries, fig.width=8, fig.height=5, units='in', res=300, fig.cap="Comparing the number of recoveries from case 1 (always chronic), case 2 (always acute) and case 3 (variable)."}
+
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,150), ylim=c(0,600))
+axis(1); axis(2); box('plot')
+for (i in which(unlist(lapply(out1, function(o) o[[2]][401,3]>0)))) lines(out1[[i]][[2]][1:151,c(1,4)], lty=2, lwd=2, col=gray(0.7))
+for (i in 1:50) lines(out2[[i]][[2]][1:151,c(1,4)], lty=1, lwd=2)
+for (i in 1:50) lines(out3[[i]][[2]][1:151,c(1,4)], lty=3, lwd=2, col=gray(0.35))
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. recovered")
+legend(x='topleft', c("Chronic","Acute","Variable"), lty=c(1,2,3), lwd=2, col=c(1,gray(0.7),gray(0.35)), bty='n')
+
+```
+
+## Infection outcome always depends on dose 
+In this simulation, the initial immune state is variable - hosts may start out Th1- or Th2-biased.
+I predicted that this should inject considerably more variation into the infection outcomes.
+Interestingly, however, that is not what I see. 
+The results are almost identical to the results from the previous case, where immunity was always initially Th1-biased.
+
+```{r All-epi-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Number of infected hosts across 50 stochastic replicate simulations when the immune state of newly infected hosts is variable."}
+out4 <- readRDS("Nested_model_variable_dose_variable_Th2_variable_outcome.RDS")
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out4[[i]][[2]][,c(1,3)], col=ifelse(out4[[i]][[2]][401,3]>0,1,2))
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+
+```
+
+```{r Mean-epi-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Mean number of infected hosts, averaged across 50 stochastic replicates, when initial immune state is always variable. The equilibrium prevalence is given in the top right corner."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out4[[i]][[2]][,c(1,3)], col=ifelse(out4[[i]][[2]][401,3]>0,gray(0.8),'lightpink'))
+mean.I <- sapply(which(unlist(lapply(out4, function(o) o[[2]][401,3]>0))), function(i) out4[[i]][[2]][,3]) %>% apply(., 1, mean)
+lines(1:401, mean.I, lwd=2)
+mean.prev <- sapply(which(unlist(lapply(out4, function(o) o[[2]][401,3]>0))), function(i) out4[[i]][[2]][,3]/apply(out4[[i]][[2]][,2:3],1,sum)) %>% apply(., 1, mean)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+legend(x='topright', 
+       paste("Mean prevalence", round(mean(mean.prev[301:401]),2), sep=" "), 
+       bty='n', text.col=1)
+```
+
+# Evolutionary dynamics
+
+In particular, classic theory (e.g., adaptive dynamics) suggests multiple ways that increasing recovery can affect virulence evolution.
+Classically, evolution maximizes $R_0 = \frac{\beta S}{v+\gamma}$, where $\gamma$ is the recovery rate.
+So if there is a transmission-virulence trade-off, such that $\beta$ is a saturating function of $v$ (e.g., $\beta=\beta_0 v/(1+v)$) then you would expect increasing $\gamma$ to cause the evolutionarily stable $v$ to *increase*, as increased recovery causes each individual infection to contribute less overall to parasite fitness. 
+On the other hand, if there is a recovery-virulence trade-off, such that $\gamma$ is an accelerating function of $v$ (e.g., $\gamma=\gamma_0 v^2$) then you would expect increasing $\gamma_0$ to cause the evolutionarily stable $v$ to *decrease*, because each individual infection becomes more important to overall fitness.
+Thus we can compare the results when infections are always acute to always chronic to see which of these trade-offs is more important in driving parasite evolution.
+
+```{r Evol-dynamics-nested-model-variable-dose-fixed-Th2-chronic-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence when hosts start out immunologically naive and all infections are chronic."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,2e-4))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out2[[i]][[2]][,c(1,6)], col=gray(0.7))
+lines(1:401, sapply(out2, function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Per-parasite virulence")
+
+
+```
+
+```{r Evol-dynamics-nested-model-variable-dose-fixed-Th2-acute-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence when hosts start out Th2-biased and all infections are acute."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,1e-3))
+axis(1); axis(2); box('plot')
+for (i in which(unlist(lapply(out1, function(o) o[[2]][401,3]>0)))) lines(out1[[i]][[2]][,c(1,6)], col=gray(0.7))
+lines(1:401, sapply(which(unlist(lapply(out1, function(o) o[[2]][401,3]>0))), 
+       function(i) out1[[i]][[2]][,6]) %>% apply(., 1, mean), lwd=2)
+
+```
+
+From these results, it is clear that, when infections are acute rather than chronic, the parasite evolves to high virulence.
+To understand why, we can look at how increasing replication rate (the benefit of virulence to the parasite) affects the within-host dynamics when the host is initially Th1-biased and infections are acute.
+I will show these dynamics for a range of replication rates, but also a range of doses, since increasing replication rate should also increase the inoculating dose.
+What you can see is that the within-host dynamics are much more sensitive to the replication rate ($b_p$) than they are to the inoculating dose, and higher values of $b_p$ lead to both larger and longer infections; increasing dose tends to increase the peak parasite load, but also slightly shortens infections.
+In other words, there is *no* trade-off between within-host replication and recovery in this system: evolutionary changes towards higher virulence actually lead to lower recovery rates making it entirely unsurprising that virulence increases.
+
+```{r Comparing-within-host-dynamics-across-dose-and-bp, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Within-host dynamics for different initial parasite doses and parasite replication rates (bp), when the host starts out Th2-biased and all infections are acute."}
+source("within_host_model.R")
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, 
+           b1=0.1, b2=0.1, I12=10000, I21=10000, 
+           m=0.9, c1=50, c2=130, C1=50, C2=50, 
+           bp=2, Kp=300, a=0.004)
+o1 = lsoda(y=c(T1=500,T2=700,P=10), times=seq(0,50,0.1), within_host_model,params)
+o2 = lsoda(y=c(T1=500,T2=700,P=30), times=seq(0,50,0.1), within_host_model,params)
+o3 = lsoda(y=c(T1=500,T2=700,P=50), times=seq(0,50,0.1), within_host_model,params)
+
+params["bp"] = 4
+o4 = lsoda(y=c(T1=500,T2=700,P=10), times=seq(0,50,0.1), within_host_model,params)
+o5 = lsoda(y=c(T1=500,T2=700,P=30), times=seq(0,50,0.1), within_host_model,params)
+o6 = lsoda(y=c(T1=500,T2=700,P=50), times=seq(0,50,0.1), within_host_model,params)
+
+params["bp"] = 6
+o7 = lsoda(y=c(T1=500,T2=700,P=10), times=seq(0,50,0.1), within_host_model,params)
+o8 = lsoda(y=c(T1=500,T2=700,P=30), times=seq(0,50,0.1), within_host_model,params)
+o9 = lsoda(y=c(T1=500,T2=700,P=50), times=seq(0,50,0.1), within_host_model,params)
+
+plot.new()
+plot.window(xlim=c(0,15), ylim=c(0,150))
+axis(1); axis(2); box('plot')
+with(as.data.frame(o1), lines(time, P, lwd=1.5, col=gray(0.1)))
+with(as.data.frame(o2), lines(time, P, lwd=1.5, col=gray(0.4)))
+with(as.data.frame(o3), lines(time, P, lwd=1.5, col=gray(0.7)))
+
+with(as.data.frame(o4), lines(time, P, lwd=1.5, col=gray(0.1), lty=2))
+with(as.data.frame(o5), lines(time, P, lwd=1.5, col=gray(0.4), lty=2))
+with(as.data.frame(o6), lines(time, P, lwd=1.5, col=gray(0.7), lty=2))
+
+with(as.data.frame(o7), lines(time, P, lwd=1.5, col=gray(0.1), lty=3))
+with(as.data.frame(o8), lines(time, P, lwd=1.5, col=gray(0.4), lty=3))
+with(as.data.frame(o9), lines(time, P, lwd=1.5, col=gray(0.7), lty=3))
+
+legend(x='topright', c("bp=2","bp=4","bp=6"), lty=c(1,2,3), bty='n')
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Parasite load")
+
+```
+
+However, why does virulence *stop* increasing?
+Classic theory would predict that if increasing virulence always reduces recovery that virulence should evolve to become infinitely large.
+However, if we look at the within-host dynamics at the evolved virulence, we see that infections are no longer acute at this high replication rate - rather they are chronic, albeit at a much lower parasite load. 
+Once the infections become chronic, the evolutionary pressures shift, preventing further evolutionary increases in virulence.
+
+```{r Comparing-within-host-dynamics-across-dose-at-evolved-virulence-and-bp, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Within-host dynamics for different initial parasite doses at the evolved virulence and replication rate when the host starts out Th2-biased and all infections are acute."}
+
+## evolved virulence when all infections are initially acute
+V = unlist(lapply(out1, function(o) o[[2]][401,6]))
+meanV=mean(V[V>0], na.rm=T)
+## realized bp = bmax*v/(v0+v), where bmax=8 and v0=1e-4
+
+params = c(S1=1000, S2=1000, s1=2000, s2=2000, 
+           b1=0.1, b2=0.1, I12=10000, I21=10000, 
+           m=0.9, c1=50, c2=130, C1=50, C2=50, 
+           bp=8*meanV/(meanV+1e-4), Kp=300, a=0.004)
+o1 = lsoda(y=c(T1=500,T2=700,P=10), times=seq(0,50,0.1), within_host_model,params)
+o2 = lsoda(y=c(T1=500,T2=700,P=30), times=seq(0,50,0.1), within_host_model,params)
+o3 = lsoda(y=c(T1=500,T2=700,P=50), times=seq(0,50,0.1), within_host_model,params)
+
+plot.new()
+plot.window(xlim=c(0,20), ylim=c(0,160))
+axis(1); axis(2); box('plot')
+with(as.data.frame(o1), lines(time, P, lwd=1.5, col=gray(0.1)))
+with(as.data.frame(o2), lines(time, P, lwd=1.5, col=gray(0.4)))
+with(as.data.frame(o3), lines(time, P, lwd=1.5, col=gray(0.7)))
+abline(h=0, lty=2)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Parasite load")
+
+```
+
+When I allow for infection outcome to vary, either because every infection starts out Th1-biased or because the initial immune state is chosen randomly, we see evolutionary dynamics that look more like those in the case where all infections are chronic, although when there is more variation in the infection outcome, we observe a transient increase in virulence early on before eventually settling on lower virulence. 
+
+```{r Evol-dynamics-nested-model-variable-dose-fixed-Th2-variable-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence when hosts are Th1-biased at infection and infection outcome is variable."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,2e-4))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out3[[i]][[2]][,c(1,6)], col=gray(0.7))
+lines(1:401, sapply(out3, function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Per-parasite virulence")
+
+
+```
+
+
+```{r Evol-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence when hosts are immunologically variable at infection and thus infection outcome is variable."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,2e-4))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out4[[i]][[2]][,c(1,6)], col=gray(0.7))
+lines(1:401, sapply(out4, function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Per-parasite virulence")
+
+
+```
+
+Interestingly, if we compare the (deterministic) within-host dynamics at the initial and evolved virulences when both dose and immunity are variable, we see that the lower virulence leads to far fewer chronic infections; however, at higher virulence, when an infection is acute it is *very* short - we don't see many long-lasting, but still acute, infections at higher virulence.
+So there is an risk with higher virulence.
+
+```{r Comparing-within-host-dynamics-across-dose-at-evolved-virulence-and-bp-2, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Within-host dynamics at the original and evolved virulence/replication rate when both dose and initial immunity are variable. Here I generated 500 replicate trajectories where both dose and initial Th2-ness are randomly chosen, and I compute the probability that the infection will be chronic, rather than acute across all initial condition choices."}
+
+V = unlist(lapply(out4, function(o) o[[2]][401,6]))
+meanV=mean(V[V>0], na.rm=T)
+## realized bp = bmax*v/(v0+v), where bmax=8 and v0=1e-4
+
+## at initial bp
+params0 = c(S1=1000, S2=1000, s1=2000, s2=2000, 
+           b1=0.1, b2=0.1, I12=10000, I21=10000, 
+           m=0.9, c1=50, c2=130, C1=50, C2=50, 
+           bp=4, Kp=300, a=0.004)
+## at evolved bp
+params1 = c(S1=1000, S2=1000, s1=2000, s2=2000, 
+           b1=0.1, b2=0.1, I12=10000, I21=10000, 
+           m=0.9, c1=50, c2=130, C1=50, C2=50, 
+           bp=8*meanV/(meanV+1e-4), Kp=300, a=0.004)
+
+Th2 <- runif(500, 400, 700)
+P <- rpois(500,round(runif(500,10,30)))
+
+o0 <- lapply(1:500, 
+             function(i) {
+               ## choose the initial dose and immune state randomly
+               lsoda(y=c(T1=1200-Th2[i],T2=Th2[i],P=P[i]), times=seq(0,50,0.1), within_host_model, params0)
+               }
+             )
+
+o1 <- lapply(1:500, 
+             function(i) {
+               ## choose the initial dose and immune state randomly
+               lsoda(y=c(T1=1200-Th2[i],T2=Th2[i],P=P[i]), times=seq(0,50,0.1), within_host_model, params1)
+               }
+             )
+
+par(mfrow=c(1,2), mar=c(1.5,1.5,0.5,0.5), oma=c(2,2,0,0))
+plot.new()
+plot.window(xlim=c(0,30), ylim=c(0,275))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(o0[[i]][,c(1,4)], lwd=0.5, col=gray(0.2))
+legend(x='topright', paste0("Prob. chronic = ", round(sum(unlist(lapply(o0, function(o) o[401,4] > 10)))/500,2)), bty='n')
+
+plot.new()
+plot.window(xlim=c(0,30), ylim=c(0,250))
+axis(1); axis(2, labels=FALSE); box('plot')
+for (i in 1:50) {
+  ## Throw out any where P drops below 2 and then recovers, as these are incredibly *unlikely* to survive to the end anyway
+  if(min(o1[[i]][,4]) < 2 & max(o1[[i]][,4]) > 50) {
+    o1[[i]][(which.min(o1[[i]][,4])+1):nrow(o1[[i]]),4] <- 0
+  }
+  lines(o1[[i]][,c(1,4)], lwd=0.5, col=gray(0.6))
+}
+legend(x='topright', paste0("Prob. chronic = ", round(sum(unlist(lapply(o1, function(o) o[401,4] > 10)))/500,2)), bty='n')
+
+mtext(side=1, line=1, outer=T, "Time")
+mtext(side=2, line=1, outer=T, "Parasite load")
+
+```
+
+Finally, we can compare the evolved virulences across the four different cases.
+While these differences might look slight, they really are not. 
+When infections are always acute because the immunological landscape is Th2-biased, the per-parasite virulence is almost *40 times* as large than when infections are always chronic because the immunological landscape is naive.
+
+```{r Virulence-comparison, fig.height=5, fig.width=8, units='in', res=300, fig.cap=""}
+
+data.frame(v=c(unlist(lapply(out2, function(o) o[[2]][401,6])),
+               unlist(lapply(out3, function(o) o[[2]][401,6])),
+               unlist(lapply(out4, function(o) o[[2]][401,6])),
+               sapply(which(unlist(lapply(out1, function(o) o[[2]][401,6]))>0), function(i) out1[[i]][[2]][401,6])),
+           case=c(rep("Naive",50),
+                  rep("Th1-biased",50),
+                  rep("Variable",50),
+                  rep("Th2-biased", sum(unlist(lapply(out1, function(o) o[[2]][401,6]))>0)))) -> vcomp
+
+boxplot(log10(v)~case, data=vcomp, xlab="")
+
+
+```
