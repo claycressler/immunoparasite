@@ -100,12 +100,12 @@ params = c(S1=1000, S2=1000, s1=2000, s2=2000,
            b=1e-1, K=100,
            c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
            tmax=400, S0=95, I0=5,
-           minTh2=400,maxTh2=1000,timestep=1)
+           minTh2=400,maxTh2=1200,timestep=1)
 tIn <- Sys.time()
 mclapply(1:50,
          function(x) out = nested_model_vary_Th2(params),
          mc.cores=10) -> out
 tOut <- Sys.time()
 print(tOut-tIn)
-saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome_2.RDS")
+saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome_3.RDS")
 
