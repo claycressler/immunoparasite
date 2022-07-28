@@ -259,6 +259,38 @@ legend(x='topright',
        bty='n', text.col=1)
 ```
 
+```{r All-epi-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome-3, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Number of infected hosts across 50 stochastic replicate simulations when the immune state of newly infected hosts is variable but very likely to be strongly Th2-biased."}
+out6 <- readRDS("Nested_model_variable_dose_variable_Th2_variable_outcome_3.RDS")
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out6[[i]][[2]][,c(1,3)], col=ifelse(out6[[i]][[2]][401,3]>0,1,2))
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+legend(x='topright', 
+       paste("Prob. extinct", sum(unlist(lapply(out6, function(o) o[[2]][401,3]==0)))/50, sep=" "), 
+       bty='n', text.col=2)
+
+```
+
+```{r Mean-epi-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome-3, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Mean number of infected hosts, averaged across 50 stochastic replicates, when initial immune state is always variable. The equilibrium prevalence is given in the top right corner."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,100))
+axis(1); axis(2); box('plot')
+for (i in 1:50) lines(out6[[i]][[2]][,c(1,3)], col=ifelse(out6[[i]][[2]][401,3]>0,gray(0.8),'lightpink'))
+mean.I <- sapply(which(unlist(lapply(out6, function(o) o[[2]][401,3]>0))), function(i) out6[[i]][[2]][,3]) %>% apply(., 1, mean)
+lines(1:401, mean.I, lwd=2)
+mean.prev <- sapply(which(unlist(lapply(out6, function(o) o[[2]][401,3]>0))), function(i) out6[[i]][[2]][,3]/apply(out6[[i]][[2]][,2:3],1,sum)) %>% apply(., 1, mean)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "No. infected")
+legend(x='topright', 
+       paste("Mean prevalence", round(mean(mean.prev[301:401]),2), sep=" "), 
+       bty='n', text.col=1)
+```
+
+
 # Evolutionary dynamics
 
 In particular, classic theory (e.g., adaptive dynamics) suggests multiple ways that increasing recovery can affect virulence evolution.
@@ -401,7 +433,7 @@ mtext(side=2, line=2.5, "Per-parasite virulence")
 
 This is true even when initial immunity is Th2-biased, which should produce a lot of acute infections that would drive the evolution of higher virulence.
 
-```{r Evol-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome-2, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence when hosts are immunologically variable at infection and thus infection outcome is variable."}
+```{r Evol-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome-2, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence when hosts are immunologically variable at infection and thus infection outcome is variable. Here hosts are more likely to be Th2-biased than Th1-biased."}
 par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
 plot.new()
 plot.window(xlim=c(0,400), ylim=c(0,2e-4))
@@ -415,6 +447,67 @@ mtext(side=2, line=2.5, "Per-parasite virulence")
 
 
 ```
+
+```{r Evol-dynamics-nested-model-variable-dose-variable-Th2-variable-outcome-3, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence when hosts are immunologically variable at infection and thus infection outcome is variable. Here hosts are MUCH more likely to be Th2-biased than Th1-biased."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,2e-4))
+axis(1); axis(2); box('plot')
+for (i in 1:50) {
+  if(out6[[i]][[2]][401,4] > 0) lines(out6[[i]][[2]][,c(1,6)], col=gray(0.7))
+}
+lines(1:401, sapply(out6[which(unlist(lapply(out6, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Per-parasite virulence")
+
+
+```
+
+```{r Highlighting-variability-in-evolutionary-trajectories, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Highlighting variability in evolutionary trajectories when the immunological landscape is variable but strongly Th2-biased."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,1e-3))
+axis(1); axis(2); box('plot')
+for (i in 1:50) {
+  if(out6[[i]][[2]][401,4] > 0) lines(out6[[i]][[2]][,c(1,6)], col=gray(0.7))
+}
+lines(1:401, sapply(out6[which(unlist(lapply(out6, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+
+inds <- which(unlist(lapply(out6, function(o) o[[2]][401,4] > 0)))
+for (i in inds[rev(order(unlist(lapply(out6[inds], function(o) mean(o[[2]][,6])))))[1:4]]) 
+  lines(out6[[i]][[2]][,c(1,6)], col=2)
+
+for (i in inds[order(unlist(lapply(out6[inds], function(o) mean(o[[2]][,6]))))[1:4]]) 
+  lines(out6[[i]][[2]][,c(1,6)], col=4)
+
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Per-parasite virulence")
+
+## Difference in virulence at time 100 between the four most and four least virulent simulations
+#(lapply(out6[inds[rev(order(unlist(lapply(out6[inds], function(o) mean(o[[2]][,6])))))[1:4]]], function(o) o[[2]][101,6]) %>% unlist %>% mean)/(lapply(out6[inds[order(unlist(lapply(out6[inds], function(o) mean(o[[2]][,6]))))[1:4]]], function(o) o[[2]][101,6]) %>% unlist %>% mean)
+
+#Comparing the evolutionary dynamics of strongly Th2-biased but variable immunological landscapes to landscapes that are ALWAYS Th2-biased.
+
+```
+
+
+```{r Comparing-evolutionary-dynamics, fig.height=5, fig.width=8, units='in', res=300, fig.cap="Evolutionary dynamics of per-parasite virulence across the immunological landscape."}
+par(mfrow=c(1,1), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+plot.new()
+plot.window(xlim=c(0,400), ylim=c(0,1e-3))
+axis(1); axis(2); box('plot')
+lines(1:401, sapply(out1[which(unlist(lapply(out1, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+lines(1:401, sapply(out2[which(unlist(lapply(out2, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+lines(1:401, sapply(out3[which(unlist(lapply(out3, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+lines(1:401, sapply(out4[which(unlist(lapply(out4, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+lines(1:401, sapply(out5[which(unlist(lapply(out5, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+lines(1:401, sapply(out6[which(unlist(lapply(out6, function(o) o[[2]][401,4] > 0)))], function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+mtext(side=1, line=2.5, "Time")
+mtext(side=2, line=2.5, "Per-parasite virulence")
+
+
+```
+
 
 This suggests that evolution is largely being driven by chronic infections, and it must be the case that parasites with lower virulence are more likely to produce chronic infections than parasites with higher virulence.
 We can check that intuition: indeed, at the starting virulence level, chronic infections are really rare, and they are more common at the evolved virulence.
