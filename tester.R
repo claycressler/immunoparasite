@@ -92,7 +92,40 @@ sourceCpp("nested_model_vary_Th2.cpp")
 # print(tOut-tIn)
 # saveRDS(out, file="Nested_model_variable_dose_fixed_Th2_acute_outcome.RDS")
 
+# ## start with a much stronger Th2 bias, but where there is still some possibility of chronic infections
+# params = c(S1=1000, S2=1000, s1=2000, s2=2000,
+#            b1=0.1, b2=0.1, I12=10000, I21=10000,
+#            m=0.9, c1=50, c2=130, C1=50, C2=50,
+#            bp=8, Kp=300, a=0.004,
+#            b=1e-1, K=100,
+#            c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
+#            tmax=400, S0=95, I0=5,
+#            minTh2=400,maxTh2=1200,timestep=1)
+# tIn <- Sys.time()
+# mclapply(1:50,
+#          function(x) out = nested_model_vary_Th2(params),
+#          mc.cores=10) -> out
+# tOut <- Sys.time()
+# print(tOut-tIn)
+# saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome_3.RDS")
+
 ## start with a much stronger Th2 bias, but where there is still some possibility of chronic infections
+# params = c(S1=1000, S2=1000, s1=2000, s2=2000,
+#            b1=0.1, b2=0.1, I12=10000, I21=10000,
+#            m=0.9, c1=50, c2=130, C1=50, C2=50,
+#            bp=8, Kp=300, a=0.004,
+#            b=1e-1, K=100,
+#            c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
+#            tmax=400, S0=95, I0=5,
+#            minTh2=500,maxTh2=1200,timestep=1)
+# tIn <- Sys.time()
+# mclapply(1:50,
+#          function(x) out = nested_model_vary_Th2(params),
+#          mc.cores=10) -> out
+# tOut <- Sys.time()
+# print(tOut-tIn)
+# saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome_4.RDS")
+
 params = c(S1=1000, S2=1000, s1=2000, s2=2000,
            b1=0.1, b2=0.1, I12=10000, I21=10000,
            m=0.9, c1=50, c2=130, C1=50, C2=50,
@@ -100,12 +133,11 @@ params = c(S1=1000, S2=1000, s1=2000, s2=2000,
            b=1e-1, K=100,
            c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
            tmax=400, S0=95, I0=5,
-           minTh2=400,maxTh2=1200,timestep=1)
+           minTh2=450,maxTh2=1200,timestep=1)
 tIn <- Sys.time()
 mclapply(1:50,
          function(x) out = nested_model_vary_Th2(params),
          mc.cores=10) -> out
 tOut <- Sys.time()
 print(tOut-tIn)
-saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome_3.RDS")
-
+saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome_5.RDS")
