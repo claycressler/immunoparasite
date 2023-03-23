@@ -126,6 +126,13 @@ sourceCpp("nested_model_vary_Th2.cpp")
 # print(tOut-tIn)
 # saveRDS(out, file="Nested_model_variable_dose_variable_Th2_variable_outcome_4.RDS")
 
+setwd("~/immunoparasite")
+library(Rcpp)
+library(parallel)
+
+## this is the version of the model where initial Th2ness varies from 400-700, with totalT fixed at 1200
+sourceCpp("nested_model_vary_Th2.cpp")
+
 params = c(S1=1000, S2=1000, s1=2000, s2=2000,
            b1=0.1, b2=0.1, I12=10000, I21=10000,
            m=0.9, c1=50, c2=130, C1=50, C2=50,

@@ -127,6 +127,8 @@ for (iij in c(20, 10, 5, 1, 0.5)) {
 ## But it's very cool that one of the equilibria undergoes a Hopf bifurcation!
 ##
 
+results = readRDS(file="Dimensionless_model_results_across_parameters_initials_iij=10.RDS")
+
 results = do.call("rbind.data.frame",results)
 colnames(results) = c("Th2activation","initT","Th1Th2bias","initP","t","Th1","Th2","P")
 results$P = round(results$P,3)
@@ -142,7 +144,7 @@ results$outcome[which(results$P > 0.7 & results$Th1 > 1 & results$Th2 < 0.3)] = 
 ## 4. Low coactivation and chronic infection
 results$outcome[which(results$P > 0.7 & results$Th1 < 0.3 & results$Th2 < 0.3)] = 4
 
-saveRDS(results, file="Dimensionless_model_results_across_parameters_initials_iij=10.RDS")
+saveRDS(results, 
 
 
 ggplot(subset(results, initT==0.8 & Th2activation < 0.6),aes(Th1Th2bias,initP,z=outcome)) + 
