@@ -82,39 +82,39 @@ simulate_model = function(pars) {
 }
 
 
-for (iij in c(5,1,0.5,0.25)) {
-  print(iij)
-  parameters = vector(mode='list', length=6*10*101*101)
-  i = 1
-  for (rel in seq(0,0.5,0.1)) {
-    for (totalI in seq(0.2,2,0.2)) {
-      for (Th1.0 in seq(0,totalI,totalI/100)) {
-        for (P.0 in seq(0.01,0.2,0.19/100)) {
-          parameters[[i]] = c(iij=iij, rel=rel, totalI=totalI,Th1.0=Th1.0,P.0=P.0)
-          i = i+1
-        }
-      }
-    }
-  }
-  mclapply(parameters,
-           function(p) simulate_model(p),
-           mc.cores=12) -> results
-  results2 = do.call("rbind.data.frame",results)
-  colnames(results2) = c("initT","initTh1","initP","t","Th1","Th2","P","Th1bias","Th2bias","outcome") 
-  mutate(results2,
-         Th2bias=paste0("Th2=",Th2bias,"*Th1")) -> results2
-  results2$Th2bias = factor(results2$Th2bias,
-                           levels=c("Th2=1*Th1",
-                                    "Th2=1.2*Th1",
-                                    "Th2=1.5*Th1",
-                                    "Th2=1.9*Th1", 
-                                    "Th2=2.3*Th1", 
-                                    "Th2=3*Th1"))
-  saveRDS(results2, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,".RDS"))
-}
+# for (iij in c(5,1,0.5,0.25)) {
+#   print(iij)
+#   parameters = vector(mode='list', length=6*10*101*101)
+#   i = 1
+#   for (rel in seq(0,0.5,0.1)) {
+#     for (totalI in seq(0.2,2,0.2)) {
+#       for (Th1.0 in seq(0,totalI,totalI/100)) {
+#         for (P.0 in seq(0.01,0.2,0.19/100)) {
+#           parameters[[i]] = c(iij=iij, rel=rel, totalI=totalI,Th1.0=Th1.0,P.0=P.0)
+#           i = i+1
+#         }
+#       }
+#     }
+#   }
+#   mclapply(parameters,
+#            function(p) simulate_model(p),
+#            mc.cores=12) -> results
+#   results2 = do.call("rbind.data.frame",results)
+#   colnames(results2) = c("initT","initTh1","initP","t","Th1","Th2","P","Th1bias","Th2bias","outcome") 
+#   mutate(results2,
+#          Th2bias=paste0("Th2=",Th2bias,"*Th1")) -> results2
+#   results2$Th2bias = factor(results2$Th2bias,
+#                            levels=c("Th2=1*Th1",
+#                                     "Th2=1.2*Th1",
+#                                     "Th2=1.5*Th1",
+#                                     "Th2=1.9*Th1", 
+#                                     "Th2=2.3*Th1", 
+#                                     "Th2=3*Th1"))
+#   saveRDS(results2, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,".RDS"))
+# }
 
 
-for (iij in c(20,10,5,1,0.5,0.25)) {
+for (iij in c(1,0.5)) {
   print(iij)
   parameters = vector(mode='list', length=6*201*201*4)
   i = 1
