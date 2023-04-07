@@ -23,7 +23,7 @@ In particular, we vary a parameter $\epsilon$ between 0 and 0.5, and define $\ch
 The parameter $\chi$ then quantifies the activation of the immune response by the parasite, so increasing $\epsilon$ implies that the parasite is increasingly biased in its activation of Th2 versus Th1 immunity.
 We explore a range of parameter values to study how the possible dynamical outcomes change.
 
-```{r}
+```{r, echo=FALSE}
 dimensionless_modelR = function(y, parms) {
 
   b1 = parms[1]
@@ -71,18 +71,28 @@ dimensionless_modelJ = function(t, y, parms) {
 
 ```
 
-```{r, echo=FALSE, eval=FALSE}
+```{r, echo=FALSE, eval=TRUE}
 dyn.load("dimensionless_model.dll")
 
 for (iij in c(20,10,5,1,0.5)) {
-  results = vector(mode='list', length=6*10*201*191)
+  results = data.frame(initT=rep(NA,6*10*101*101),
+                       initTh1=rep(NA,6*10*101*101),
+                       initP=rep(NA,6*10*101*101),
+                       t=rep(NA,6*10*101*101),
+                       Th1=rep(NA,6*10*101*101),
+                       Th2=rep(NA,6*10*101*101),
+                       P=rep(NA,6*10*101*101),
+                       Th1bias=rep(NA,6*10*101*101),
+                       Th2bias=rep(NA,6*10*101*101),
+                       outcome=rep(NA,6*10*101*101))
   i = 1
   for (rel in seq(0,0.5,0.1)) {
     print(rel)
     for (totalI in seq(0.2,2,0.2)) {
       print(totalI)
-      for (Th1.0 in seq(0,totalI,totalI/200)) {
-        for (P.0 in seq(0.01,0.2,0.001)) {
+      for (Th1.0 in seq(0,totalI,totalI/100)) {
+        print(Th1.0)
+        for (P.0 in seq(0.01,0.2,0.19/100)) {
           params = c(b1=0.000111111, b2=.000111111, 
                      s1=2.22222, s2=2.22222, 
                      i12=iij, i21=iij, 
@@ -96,199 +106,54 @@ for (iij in c(20,10,5,1,0.5)) {
           while((abs(diff(tail(out[,2],2))) > 1e-12 | abs(diff(tail(out[,3],2))) > 1e-12 | abs(diff(tail(out[,4],2))) > 1e-12) & tail(out[,1],1) < 5000) {
             #print(paste("more simulation required for", rel,totalI,Th1.0,P.0))
             times = seq(tail(out[,1],1),tail(out[,1],1)+100,1)
-            y0 = tail(out[,2:4],1)
+            y0 = c(Th1=tail(out[,"Th1"],1),Th2=tail(out[,"Th2"],1),P=tail(out[,"P"],1))
             out = ode(y0, times, func="derivs", parms=params, dllname="dimensionless_model", initfunc="initmod", atol=1e-14, rtol=1e-14)
-            if (out[101,4] < 0) {print("generating negative values"); print(rel); print(iij); print(y0); out[101,4] = 0} # catch negatives
+            if (out[101,4] < 0) {
+              #print("generating negative values"); print(rel); print(iij); print(y0); 
+              out[101,4] = 0} # catch negatives
           }
-          results[[i]] <- c(rel,totalI,Th1.0,P.0,as.numeric(tail(out[,1:4],1)))
+          ## Classify the equilibrium reached (so long as the final t < 5000)
+          if (tail(out[,1],1) < 5000) {
+            ## Calculate the stability of the equilibrium
+            equilStab = eigen(jacobian.full(y=as.numeric(tail(out[,2:4],1)),
+                                            func=dimensionless_modelJ, 
+                                            parms=params))$values
+            if (all(Re(equilStab) < 0)) {## this equilibrium is stable, classify it
+              if (tail(out[,"Th1"],1) < 0.1 & tail(out[,"Th2"],1) > 1 & tail(out[,"P"],1) < 1e-9)
+                outcome = 1 ## Th2 polarization
+              else if (tail(out[,"Th1"],1) > 0.8 & tail(out[,"Th2"],1) > 0.8 & tail(out[,"P"],1) < 0.2)
+                outcome = 2 ## High Th1+Th2
+              else if (tail(out[,"Th1"],1) > 0.9 & tail(out[,"Th2"],1) < 0.3 & tail(out[,"P"],1) > 0.6)
+                outcome = 3 ## Th1 polarization
+              else outcome = 4 ## Low Th1+Th2
+            } else outcome = 5 ## Saddle
+          } else outcome = 6 ## Cycling
+          results[i,] <- c(totalI,
+                          Th1.0,
+                          P.0,
+                          tail(out[,"time"],1),
+                          round(tail(out[,"Th1"],1),3),
+                          round(tail(out[,"Th2"],1),3),
+                          round(tail(out[,"P"],1),3),
+                          Th1.0/totalI,
+                          round((1+rel)/(1-rel),1),
+                          outcome)
           i = i+1
         }
       }
     }
   }
-  
-  results = do.call("rbind.data.frame",results)
-  colnames(results) = c("Th2activation","initT","initTh1","initP","t","Th1","Th2","P")
-  mutate(results, 
-         Th1bias=initTh1/initT,
-         P=round(results$P,3),
-         initT = round(results$initT,1),
-         outcome = rep(0,nrow(results))) -> results
+  mutate(results,
+         Th2bias=paste0("Th2=",Th2bias,"*Th1")) -> results
+  results$Th2bias = factor(results$Th2bias,
+                           levels=c("Th2=1*Th1",
+                                    "Th2=1.2*Th1",
+                                    "Th2=1.5*Th1",
+                                    "Th2=1.9*Th1", 
+                                    "Th2=2.3*Th1", 
+                                    "Th2=3*Th1"))
   saveRDS(results, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,".RDS"))
 }
-
-```
-
-```{r, echo=FALSE}
-results20 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=20.RDS")
-mutate(results20,
-       Th1 = round(Th1,3),
-       Th2 = round(Th2,3)) -> results20
-params = c(b1=0.000111111, b2=.000111111, 
-           s1=2.22222, s2=2.22222, 
-           i12=20, i21=20, 
-           k1=1/6, k2=1/6, 
-           c1=0.111111, c2=0.111111, 
-           r=3.33333, a=3.33333)
-## Classify which equilibrium is reached for each initial condition
-for (rel in seq(0,0.5,0.1)) {
-  params["c1"] = (1-rel)*0.111111
-  params["c2"] = (1+rel)*0.111111
-  starts = list(c(0,2,0), ## find the Th2 polarization equilibrium
-                c(2,2,0), ## find the Th1-Th2 high coactivation equilibrium
-                c(2,0,1), ## find the Th1 polarization equilibrium
-                c(0,0,1)) ## find the Th1-Th2 low coactivation equilibrium
-  for (i in 1:4) { ## classify outcomes based on the equilibrium reached
-    equil = multiroot(dimensionless_modelR, start=starts[[i]], parms=params)$root %>% round(.,3)
-    print(equil)
-    results20$outcome[with(results20, which(Th1==equil[1] & Th2==equil[2] & P==equil[3]))] = i
-  }
-}
-
-results10 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=10.RDS")
-mutate(results10,
-       Th1 = round(Th1,3),
-       Th2 = round(Th2,3)) -> results10
-params = c(b1=0.000111111, b2=.000111111, 
-           s1=2.22222, s2=2.22222, 
-           i12=10, i21=10, 
-           k1=1/6, k2=1/6, 
-           c1=0.111111, c2=0.111111, 
-           r=3.33333, a=3.33333)
-## Classify which equilibrium is reached for each initial condition
-for (rel in seq(0,0.5,0.1)) {
-  params["c1"] = (1-rel)*0.111111
-  params["c2"] = (1+rel)*0.111111
-  starts = list(c(0,2,0), ## find the Th2 polarization equilibrium
-                c(1.2,1,0.01), ## find the Th1-Th2 high coactivation equilibrium
-                c(2,0,1), ## find the Th1 polarization equilibrium
-                c(0.1,0.1,1)) ## find the Th1-Th2 low coactivation equilibrium
-  for (i in 1:4) { ## classify outcomes based on the equilibrium reached
-    equil = multiroot(dimensionless_modelR, start=starts[[i]], parms=params)$root %>% round(.,3)
-    print(equil)
-    results10$outcome[with(results10, which(Th1==equil[1] & Th2==equil[2] & P==equil[3]))] = i
-  }
-}
-## There are sets of initial condition and parameter combinations where the simulations can get stuck at an unstable saddle
-rel = 0
-possEquil0 = results10[with(results10, which(outcome==0 & t < 5000 & Th2activation==rel)),c("Th1","Th2","P")] %>% unique
-params["c1"] = (1-rel)*0.111111
-params["c2"] = (1+rel)*0.111111
-verifEquil0 = multiroot(dimensionless_modelR, start=as.numeric(possEquil0+1e-2), parms=params)$root
-evalsEquil0 = eigen(jacobian.full(y=verifEquil0, func=dimensionless_modelJ, parms=params))$values
-
-rel = 0.1
-possEquil1 = results10[with(results10, which(outcome==0 & t < 5000 & Th2activation==rel)),c("Th1","Th2","P")] %>% unique
-params["c1"] = (1-rel)*0.111111
-params["c2"] = (1+rel)*0.111111
-verifEquil1 = multiroot(dimensionless_modelR, start=as.numeric(possEquil1+1e-2), parms=params)$root
-evalsEquil1 = eigen(jacobian.full(y=verifEquil1, func=dimensionless_modelJ, parms=params))$values
-
-rel = 0.2
-possEquil2 = results10[with(results10, which(outcome==0 & t < 5000 & Th2activation==rel)),c("Th1","Th2","P")] %>% unique
-params["c1"] = (1-rel)*0.111111
-params["c2"] = (1+rel)*0.111111
-verifEquil2 = multiroot(dimensionless_modelR, start=as.numeric(possEquil2+1e-2), parms=params)$root
-evalsEquil2 = eigen(jacobian.full(y=verifEquil2, func=dimensionless_modelJ, parms=params))$values
-
-rel = 0.4
-possEquil4 = results10[with(results10, which(outcome==0 & t < 5000 & Th2activation==rel)),c("Th1","Th2","P")] %>% unique
-params["c1"] = (1-rel)*0.111111
-params["c2"] = (1+rel)*0.111111
-verifEquil4 = multiroot(dimensionless_modelR, start=as.numeric(possEquil4+1e-2), parms=params)$root
-evalsEquil4 = eigen(jacobian.full(y=verifEquil4, func=dimensionless_modelJ, parms=params))$values
-
-rel = 0.5
-possEquil5 = results10[with(results10, which(outcome==0 & t < 5000 & Th2activation==rel)),c("Th1","Th2","P")] %>% unique
-params["c1"] = (1-rel)*0.111111
-params["c2"] = (1+rel)*0.111111
-verifEquil5 = multiroot(dimensionless_modelR, start=as.numeric(possEquil5+1e-2), parms=params)$root
-evalsEquil5 = eigen(jacobian.full(y=verifEquil5, func=dimensionless_modelJ, parms=params))$values
-
-## set the outcome for rel=0 (verifEquil0)
-## use 5 to code for the saddle-like behavior, because we can't actually say where the system will go from the saddle - noting that both saddles involve P becoming near 0
-results10$outcome[with(results10, which(Th1==round(verifEquil0,3)[1] & Th2==round(verifEquil0,3)[2] & P==round(verifEquil0,3)[3]))] = 5 
-## verifEquil1,2,4,5 are all the same
-results10$outcome[with(results10, which(Th1==round(verifEquil1,3)[1] & Th2==round(verifEquil1,3)[2] & P==round(verifEquil1,3)[3]))] = 5 # use 5 to code for the saddle-like behavior, because we can't actually say where the system will go from the saddle
-
-## Set the cycling outcome
-results10$outcome[which(results10$t==5000)] = 6
-
-results5 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=5.RDS")
-mutate(results5,
-       Th1 = round(Th1,3),
-       Th2 = round(Th2,3)) -> results5
-params = c(b1=0.000111111, b2=.000111111, 
-           s1=2.22222, s2=2.22222, 
-           i12=5, i21=5, 
-           k1=1/6, k2=1/6, 
-           c1=0.111111, c2=0.111111, 
-           r=3.33333, a=3.33333)
-## Classify which equilibrium is reached for each initial condition
-for (rel in seq(0,0.5,0.1)) {
-  params["c1"] = (1-rel)*0.111111
-  params["c2"] = (1+rel)*0.111111
-  starts = list(c(0,2,0), ## find the Th2 polarization equilibrium
-                c(1,1,0.1), ## find the Th1-Th2 high coactivation equilibrium
-                c(2,0,1), ## find the Th1 polarization equilibrium
-                c(0.1,0.1,1)) ## find the Th1-Th2 low coactivation equilibrium
-  for (i in 1:4) { ## classify outcomes based on the equilibrium reached
-    equil = multiroot(dimensionless_modelR, start=starts[[i]], parms=params)$root %>% round(.,3)
-    print(equil)
-    results5$outcome[with(results5, which(Th1==equil[1] & Th2==equil[2] & P==equil[3]))] = i
-  }
-}
-
-results1 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=1.RDS")
-mutate(results1,
-       Th1 = round(Th1,3),
-       Th2 = round(Th2,3)) -> results1
-params = c(b1=0.000111111, b2=.000111111, 
-           s1=2.22222, s2=2.22222, 
-           i12=1, i21=1, 
-           k1=1/6, k2=1/6, 
-           c1=0.111111, c2=0.111111, 
-           r=3.33333, a=3.33333)
-## Classify which equilibrium is reached for each initial condition
-for (rel in seq(0,0.5,0.1)) {
-  params["c1"] = (1-rel)*0.111111
-  params["c2"] = (1+rel)*0.111111
-  starts = list(c(0,2,0), ## find the Th2 polarization equilibrium
-                c(1,1,0.1), ## find the Th1-Th2 high coactivation equilibrium
-                c(2,0,1), ## find the Th1 polarization equilibrium
-                c(0.1,0.1,1)) ## find the Th1-Th2 low coactivation equilibrium
-  for (i in 1:4) { ## classify outcomes based on the equilibrium reached
-    equil = multiroot(dimensionless_modelR, start=starts[[i]], parms=params)$root %>% round(.,3)
-    print(equil)
-    results1$outcome[with(results1, which(Th1==equil[1] & Th2==equil[2] & P==equil[3]))] = i
-  }
-}
-
-results05 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=0.5.RDS")
-mutate(results05,
-       Th1 = round(Th1,3),
-       Th2 = round(Th2,3)) -> results05
-params = c(b1=0.000111111, b2=.000111111, 
-           s1=2.22222, s2=2.22222, 
-           i12=0.5, i21=0.5, 
-           k1=1/6, k2=1/6, 
-           c1=0.111111, c2=0.111111, 
-           r=3.33333, a=3.33333)
-## Classify which equilibrium is reached for each initial condition
-for (rel in seq(0,0.5,0.1)) {
-  params["c1"] = (1-rel)*0.111111
-  params["c2"] = (1+rel)*0.111111
-  starts = list(c(0,2,0), ## find the Th2 polarization equilibrium
-                c(1,1,0.1), ## find the Th1-Th2 high coactivation equilibrium
-                c(2,0,1), ## find the Th1 polarization equilibrium
-                c(0.1,0.1,1)) ## find the Th1-Th2 low coactivation equilibrium
-  for (i in 1:4) { ## classify outcomes based on the equilibrium reached
-    equil = multiroot(dimensionless_modelR, start=starts[[i]], parms=params)$root %>% round(.,3)
-    print(equil)
-    results05$outcome[with(results05, which(Th1==equil[1] & Th2==equil[2] & P==equil[3]))] = i
-  }
-}
-
 
 
 ```
@@ -395,13 +260,13 @@ When $\iota_{12}=\iota_{21}=0.5$, so that cross-inhibition is 2x more sensitive 
 Th1 polarization is only possible if the parasite stimulates Th1 and Th2 immunity equally (far left column).
 
 ```{r results05fig, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for $\\iota_{12}=\\iota_{21}=0.5$. Initial parasite dose varies along the y-axis of every panel. Initial Th1 bias varies along the x-axis of every panel. An initial Th1 bias of 0 means that all of the immune cells are Th2, whereas an initial Th1 bias of 1 means that all of the immune cells are Th1. Across rows, we vary the initial total number of immune cells, so the top row shows the outcomes when the immune system is initially very inactive, whereas the bottorm row shows the outcomes when the immune system is initially very active. Across columns, we vary the bias in the parasite's activation of Th2 immunity, so the left column shows the outcomes when the parasite stimulates Th1 and Th2 equally, whereas the right column shows the outcomes when the parasite stimulates Th2 immunity three times faster than Th1 immunity."}
-mutate(results0.5, 
-       Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1")) -> results0.5
-results0.5$Th2bias = factor(results0.5$Th2bias, levels=c("Th2=1*Th1","Th2=1.2*Th1","Th2=1.5*Th1","Th2=1.9*Th1", "Th2=2.3*Th1", "Th2=3*Th1"))
-mybreaks = results0.5$outcome %>% unique %>% sort
+mutate(results05, 
+       Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1")) -> results05
+results05$Th2bias = factor(results05$Th2bias, levels=c("Th2=1*Th1","Th2=1.2*Th1","Th2=1.5*Th1","Th2=1.9*Th1", "Th2=2.3*Th1", "Th2=3*Th1"))
+mybreaks = results05$outcome %>% unique %>% sort
 mycolors = c("black","lightgrey","red","blue")[mybreaks]
 mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2")[mybreaks]
-ggplot(results0.5,aes(Th1bias,initP,z=outcome)) + 
+ggplot(results05,aes(Th1bias,initP,z=outcome)) + 
   geom_contour_filled(breaks=c(mybreaks,5)) + 
   scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
   facet_grid(initT~Th2bias) + 
@@ -410,3 +275,201 @@ ggplot(results0.5,aes(Th1bias,initP,z=outcome)) +
 
 ```
 
+```{r, echo=FALSE, eval=FALSE}
+for (iij in c(20,10,5,1,0.5)) {
+  results = data.frame(initT=rep(NA,6*201*201*4),
+                       initTh1=rep(NA,6*201*201*4),
+                       initP=rep(NA,6*201*201*4),
+                       t=rep(NA,6*201*201*4),
+                       Th1=rep(NA,6*201*201*4),
+                       Th2=rep(NA,6*201*201*4),
+                       P=rep(NA,6*201*201*4),
+                       Th1bias=rep(NA,6*201*201*4),
+                       Th2bias=rep(NA,6*201*201*4),
+                       outcome=rep(NA,6*201*201*4))
+  i = 1
+  for (rel in seq(0,0.5,0.1)) {
+    print(rel)
+    for (totalI in seq(0.2,2,1.8/200)) {
+      print(totalI)
+      for (Th1.0 in seq(0,totalI,totalI/200)) {
+        for (P.0 in c(0.05,0.1,0.15,0.2)) {
+          params = c(b1=0.000111111, b2=.000111111, 
+                     s1=2.22222, s2=2.22222, 
+                     i12=iij, i21=iij, 
+                     k1=1/6, k2=1/6, 
+                     c1=(1-rel)*0.111111, c2=(1+rel)*0.111111, 
+                     r=3.33333, a=3.33333)
+          y0 = c(Th1=Th1.0, Th2=totalI-Th1.0, P=P.0)
+          times = seq(0,100)
+          out = ode(y0, times, func="derivs", parms=params, dllname="dimensionless_model", initfunc="initmod", atol=1e-14, rtol=1e-14)
+          
+          while((abs(diff(tail(out[,2],2))) > 1e-12 | abs(diff(tail(out[,3],2))) > 1e-12 | abs(diff(tail(out[,4],2))) > 1e-12) & tail(out[,1],1) < 5000) {
+            #print(paste("more simulation required for", rel,totalI,Th1.0,P.0))
+            times = seq(tail(out[,1],1),tail(out[,1],1)+100,1)
+            y0 = tail(out[,2:4],1)
+            out = ode(y0, times, func="derivs", parms=params, dllname="dimensionless_model", initfunc="initmod", atol=1e-14, rtol=1e-14)
+            if (out[101,4] < 0) {
+              #print("generating negative values"); print(rel); print(iij); print(y0); 
+              out[101,4] = 0} # catch negatives
+          }
+          ## Classify the equilibrium reached (so long as the final t < 5000)
+          if (tail(out[,1],1) < 5000) {
+            ## Calculate the stability of the equilibrium
+            equilStab = eigen(jacobian.full(y=as.numeric(tail(out[,2:4],1)),
+                                            func=dimensionless_modelJ, 
+                                            parms=params))$values
+            if (all(Re(equilStab) < 0)) {## this equilibrium is stable, classify it
+              if (tail(out[,"Th1"],1) < 0.1 & tail(out[,"Th2"],1) > 1 & tail(out[,"P"],1) < 1e-9)
+                outcome = 1 ## Th2 polarization
+              else if (tail(out[,"Th1"],1) > 0.8 & tail(out[,"Th2"],1) > 0.8 & tail(out[,"P"],1) < 0.2)
+                outcome = 2 ## High Th1+Th2
+              else if (tail(out[,"Th1"],1) > 0.9 & tail(out[,"Th2"],1) < 0.3 & tail(out[,"P"],1) > 0.6)
+                outcome = 3 ## Th1 polarization
+              else outcome = 4 ## Low Th1+Th2
+            } else outcome = 5 ## Saddle
+          } else outcome = 6 ## Cycling
+          results[i,] <- c(totalI,
+                          Th1.0,
+                          P.0,
+                          tail(out[,"time"],1),
+                          round(tail(out[,"Th1"],1),3),
+                          round(tail(out[,"Th2"],1),3),
+                          round(tail(out[,"P"],1),3),
+                          Th1.0/totalI,
+                          round((1+rel)/(1-rel),1),
+                          outcome)
+          i = i+1
+        }
+      }
+    }
+  }
+  mutate(results,
+         Th2bias=paste0("Th2=",Th2bias,"*Th1")) -> results
+  results$Th2bias = factor(results$Th2bias,
+                           levels=c("Th2=1*Th1",
+                                    "Th2=1.2*Th1",
+                                    "Th2=1.5*Th1",
+                                    "Th2=1.9*Th1", 
+                                    "Th2=2.3*Th1", 
+                                    "Th2=3*Th1"))
+  saveRDS(results, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_fixed_P0.RDS"))
+}
+
+```
+
+```{r, echo=FALSE, eval=FALSE}
+for (iij in c(20,10,5,1,0.5)) {
+  print(iij)
+  results = readRDS(paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_fixed_P0.RDS"))
+  ## For some reason, these are recording in such a way that they create issues later
+  mutate(results,
+         Th1=round(Th1,3),
+         Th2=round(Th2,3),
+         Th1bias = rep(rep(rep(seq(0,1,0.005),each=4),201),6),
+         initT = rep(rep(seq(0.2,2,1.8/200),each=804),6),
+         Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1"),
+         iij=iij) -> results
+  
+  
+    print(any(results$outcome==0))
+  
+  ## Save
+  saveRDS(results, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_fixed_P0.RDS"))
+}
+```
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=20$."}
+results20 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=20_fixed_P0.RDS")
+
+mybreaks = results20$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue","white","purple")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2", "Saddle", "Cycling")[mybreaks]
+ggplot(results20,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,max(mybreaks+1))) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+```
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=10$."}
+results10 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=10_fixed_P0.RDS")
+
+mybreaks = results10$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue","white","purple")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2", "Saddle", "Cycling")[mybreaks]
+ggplot(results10,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,max(mybreaks+1))) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+```
+
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=5$."}
+
+results5 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=5_fixed_P0.RDS")
+
+mybreaks = results5$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results5,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+```
+
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=1$."}
+results1 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=1_fixed_P0.RDS")
+
+mybreaks = results1$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results1,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+```
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=0.5$."}
+results05 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=0.5_fixed_P0.RDS")
+
+mybreaks = results05$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue","white","purple")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2", "Saddle", "Cycling")[mybreaks]
+ggplot(results05,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,max(mybreaks+1))) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+```
