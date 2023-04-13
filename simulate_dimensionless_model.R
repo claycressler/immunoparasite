@@ -77,7 +77,7 @@ simulate_model = function(pars) {
            round(tail(out[,"Th2"],1),3),
            round(tail(out[,"P"],1),3),
            Th1.0/totalI,
-           round((1+rel)/(1-rel),1),
+           round((1+rel)/(1-rel), 2),
            outcome))
 }
 
@@ -114,7 +114,7 @@ simulate_model = function(pars) {
 # }
 
 
-for (iij in c(8,4,2,1,0.5)) {
+for (iij in c(16,8,4,2,1,0.5)) {
   print(iij)
   parameters = vector(mode='list', length=3*201*201*4)
   i = 1
