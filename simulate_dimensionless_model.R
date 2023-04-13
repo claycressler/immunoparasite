@@ -114,11 +114,11 @@ simulate_model = function(pars) {
 # }
 
 
-for (iij in c(1,0.5)) {
+for (iij in c(8,4,2,1,0.5)) {
   print(iij)
-  parameters = vector(mode='list', length=6*201*201*4)
+  parameters = vector(mode='list', length=3*201*201*4)
   i = 1
-  for (rel in seq(0,0.5,0.1)) {
+  for (rel in c(0,0.75/2.75,1.5/3.5)) {
     for (totalI in seq(0.2,2,1.8/200)) {
       for (Th1.0 in seq(0,totalI,totalI/200)) {
         for (P.0 in c(0.05,0.1,0.15,0.2)) {
@@ -137,13 +137,10 @@ for (iij in c(1,0.5)) {
          Th2bias=paste0("Th2=",Th2bias,"*Th1")) -> results2
   results2$Th2bias = factor(results2$Th2bias,
                             levels=c("Th2=1*Th1",
-                                     "Th2=1.2*Th1",
-                                     "Th2=1.5*Th1",
-                                     "Th2=1.9*Th1", 
-                                     "Th2=2.3*Th1", 
-                                     "Th2=3*Th1"))
+                                     "Th2=1.75*Th1",
+                                     "Th2=2.5*Th1"))
   
-  saveRDS(results2, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_fixed_P0.RDS"))
+  saveRDS(results2, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_final.RDS"))
 }
 
 
