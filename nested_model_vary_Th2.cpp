@@ -70,7 +70,7 @@ List nested_model_vary_Th2(NumericVector params) {
     Hosts(i,3) = 0; // initial v
     Hosts(i,4) = i; // individual ID for tracking through time
   }
-  for (int i=S; i < S+I; i++) { // set the initial state of the susceptible hosts
+  for (int i=S; i < S+I; i++) { // set the initial state of the infected hosts
     Th2 = round(runif(1,minTh2,maxTh2)[0]); // draw initial Th2ness from a uniform distribution 
     Hosts(i,0) = 1200-Th2; // initial Th1 
     Hosts(i,1) = Th2; // initial Th2

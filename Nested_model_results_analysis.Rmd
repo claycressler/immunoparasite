@@ -24,7 +24,7 @@ Note that I do not assume that $P$ affects the contact process.
 However, $P$ does affect the size of the infectious dose; I assume that the infectious dose is Poisson random variable with mean and variance equal to 10\% of the current parasite burden $P$.
 When an infection occurs, I draw the dose from a Poisson distribution; if the dose is equal to zero, then the infection fails. 
 I also assume that the per-parasite exploitation rate $v$ affects the maximum within-host replication rate, according to the function $\frac{b_{max} v}{v_0 + v}$. 
-Thus any potential transmission-virulence trade-off is built in mechanistically, and thus in a (potentially) more biologically plausible way.]
+Thus any potential transmission-virulence trade-off is built in mechanistically, and thus in a (potentially) more biologically plausible way.
 
 **Interestingly, this sets up a situation where the immunological details will determine whether or not a transmission-virulence trade-off exists or not.**
 Specifically, if increasing dose makes a chronic infection more likely, then there is always a transmission benefit of increasing virulence.
