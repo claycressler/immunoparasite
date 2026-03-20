@@ -48,6 +48,21 @@ for (th2 in seq(400,800,50)) {
 }
 dev.off()
 
+png(file="Burden_dynamics_as_fixed_Th2_varies.png", height=9, width=9,  units='in', res=300)
+par(mfrow=c(3,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in seq(400,800,50)) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_fixed_Th2=",th2,".RDS"))
+  plot.new()
+  plot.window(xlim=c(0,400), ylim=c(0,210))
+  axis(1); axis(2); box('plot')
+  for (i in 1:50) lines(1:401,lapply(out2[[i]][[1]], function(o) mean(o[which(o[,3]>0),3])) %>% unlist)
+  mtext(side=1, line=2.5, "Time")
+  mtext(side=2, line=2.5, "Avg. burden")
+  legend(x='bottomright', legend=paste0("Init Th2=",th2), bty='n')
+}
+dev.off()
+
+
 png(file="Evolutionary_dynamics_as_fixed_Th2_varies.png", height=9, width=9,  units='in', res=300)
 par(mfrow=c(3,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
 for (th2 in seq(400,800,50)) {
@@ -105,6 +120,21 @@ for (th2 in seq(400,550,50)) {
   legend(x='bottomright', legend=paste0("Init Th2=",th2,"-",1200-th2), bty='n')
 }
 dev.off()
+
+png(file="Burden_dynamics_as_min_Th2_varies_5050_bias.png", height=9, width=9,  units='in', res=300)
+par(mfrow=c(2,2), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in seq(400,550,50)) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_5050_bias_variable_Th2=",th2,".RDS"))
+  plot.new()
+  plot.window(xlim=c(0,400), ylim=c(0,210))
+  axis(1); axis(2); box('plot')
+  for (i in 1:50) lines(1:401,lapply(out2[[i]][[1]], function(o) mean(o[which(o[,3]>0),3])) %>% unlist)
+  mtext(side=1, line=2.5, "Time")
+  mtext(side=2, line=2.5, "Avg. burden")
+  legend(x='bottomright', legend=paste0("Init Th2=",th2,"-",1200-th2), bty='n')
+}
+dev.off()
+
 
 png(file="Evolutionary_dynamics_as_min_Th2_varies_5050_bias.png", height=9, width=9,  units='in', res=300)
 par(mfrow=c(2,2), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
