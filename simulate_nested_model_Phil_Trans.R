@@ -44,7 +44,7 @@ for (th2 in seq(400,800,50)) {
   for (i in 1:50) lines(out2[[i]][[2]][,c(1,3)], col=ifelse(out2[[i]][[2]][401,3]>0,1,2))
   mtext(side=1, line=2.5, "Time")
   mtext(side=2, line=2.5, "No. infected")
-  legend(x='bottomright', legend=paste0("Th2=",th2), bty='n')
+  legend(x='bottomright', legend=paste0("Init Th2=",th2), bty='n')
 }
 dev.off()
 
@@ -55,11 +55,18 @@ for (th2 in seq(400,800,50)) {
   plot.new()
   plot.window(xlim=c(0,400), ylim=c(0,1e-3))
   axis(1); axis(2); box('plot')
-  for (i in 1:50) lines(out2[[i]][[2]][,c(1,6)], col=gray(0.7))
-  lines(1:401, sapply(out2, function(o) o[[2]][,6]) %>% apply(., 1, mean), lwd=2)
+  for (i in 1:50) {
+    vseq = out2[[i]][[2]][,6]
+    if (any(is.na(vseq))) {
+      out2[[i]][[2]][which(is.na(vseq)):length(vseq),6] = NA
+      lines(out2[[i]][[2]][,c(1,6)], col='pink')
+    }
+    else lines(out2[[i]][[2]][,c(1,6)], col=gray(0.7))
+  }
+  lines(1:401, sapply(out2, function(o) o[[2]][,6]) %>% apply(., 1, function(q) mean(q,na.rm=T)), lwd=2)
   mtext(side=1, line=2.5, "Time")
   mtext(side=2, line=2.5, "Per-parasite virulence")
-  legend(x='bottomright', legend=paste0("Th2=",th2), bty='n')
+  legend(x='bottomright', legend=paste0("Init Th2=",th2), bty='n')
 }
 dev.off()
 
@@ -83,3 +90,40 @@ for (th2 in seq(400,550,50)) {
   saveRDS(out, file=paste0("Nested_model_variable_dose_5050_bias_variable_Th2=",th2,".RDS"))
 }
 
+png(file="Epidemiological_dynamics_as_min_Th2_varies_5050_bias.png", height=9, width=9,  units='in', res=300)
+par(mfrow=c(2,2), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in seq(400,550,50)) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_5050_bias_variable_Th2=",th2,".RDS"))
+  ## Y axis limits
+  ymax <- ceiling((lapply(out2, function(o) max(o[[2]][,3])) %>% unlist %>% max)/10)*10
+  plot.new()
+  plot.window(xlim=c(0,400), ylim=c(0,ymax))
+  axis(1); axis(2); box('plot')
+  for (i in 1:50) lines(out2[[i]][[2]][,c(1,3)], col=ifelse(out2[[i]][[2]][401,3]>0,1,2))
+  mtext(side=1, line=2.5, "Time")
+  mtext(side=2, line=2.5, "No. infected")
+  legend(x='bottomright', legend=paste0("Init Th2=",th2,"-",1200-th2), bty='n')
+}
+dev.off()
+
+png(file="Evolutionary_dynamics_as_min_Th2_varies_5050_bias.png", height=9, width=9,  units='in', res=300)
+par(mfrow=c(2,2), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in seq(400,550,50)) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_5050_bias_variable_Th2=",th2,".RDS"))
+  plot.new()
+  plot.window(xlim=c(0,400), ylim=c(0,5e-4))
+  axis(1); axis(2); box('plot')
+  for (i in 1:50) {
+    vseq = out2[[i]][[2]][,6]
+    if (any(is.na(vseq))) {
+      out2[[i]][[2]][which(is.na(vseq)):length(vseq),6] = NA
+      lines(out2[[i]][[2]][,c(1,6)], col='pink')
+    }
+    else lines(out2[[i]][[2]][,c(1,6)], col=gray(0.7))
+  }
+  lines(1:401, sapply(out2, function(o) o[[2]][,6]) %>% apply(., 1, function(q) mean(q,na.rm=T)), lwd=2)
+  mtext(side=1, line=2.5, "Time")
+  mtext(side=2, line=2.5, "Per-parasite virulence")
+  legend(x='bottomright', legend=paste0("Init Th2=",th2,"-",1200-th2), bty='n')
+}
+dev.off()

@@ -82,6 +82,7 @@ List nested_model_vary_Th2(NumericVector params) {
     Hosts(i,3) = rlnorm(1, mu, sigma)[0];
     Hosts(i,4) = i; // individual ID for tracking through time
   }
+  int nextID = S+I;
   
   // initialize time
   double t = 0.0; 
@@ -230,7 +231,8 @@ List nested_model_vary_Th2(NumericVector params) {
       Hosts(Hosts.nrow()-1,1) = 0; // initial Th2
       Hosts(Hosts.nrow()-1,2) = 0; // initial P
       Hosts(Hosts.nrow()-1,3) = 0; // initial v
-      Hosts(Hosts.nrow()-1,4) = Hosts.nrow()-1; // ID
+      Hosts(Hosts.nrow()-1,4) = nextID; // ID
+      nextID += 1; // increment ID
       S += 1;
     }
     // Infection
