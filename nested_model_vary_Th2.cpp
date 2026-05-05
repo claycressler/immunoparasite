@@ -62,25 +62,30 @@ List nested_model_vary_Th2(NumericVector params) {
   double Th2; 
   
   // Set up the host population as a matrix, since the total number of hosts cannot grow
-  NumericMatrix Hosts(S+I, 5);
+  NumericMatrix Hosts(S+I, 7);
   for (int i=0; i < S; i++) { // set the initial state of the susceptible hosts
     Hosts(i,0) = 0; // initial Th1 
     Hosts(i,1) = 0; // initial Th2
     Hosts(i,2) = 0; // initial P
     Hosts(i,3) = 0; // initial v
     Hosts(i,4) = i; // individual ID for tracking through time
+    Hosts(i,5) = 0; // initial Th2 - stored
+    Hosts(i,6) = 0; // initial P - stored
   }
   for (int i=S; i < S+I; i++) { // set the initial state of the infected hosts
     Th2 = round(runif(1,minTh2,maxTh2)[0]); // draw initial Th2ness from a uniform distribution 
     Hosts(i,0) = 1200-Th2; // initial Th1 
     Hosts(i,1) = Th2; // initial Th2
-    Hosts(i,2) = rpois(1, Kp/10)[0]; // initial P is drawn from a Poisson distribution
+    double P0 = rpois(1, Kp/10)[0]; // initial P is drawn from a Poisson distribution
+    Hosts(i,2) = P0;
     // initial virulence is drawn from a lognormal distribution
     double vSD = vCV * v; 
     double mu = log(pow(v,2.0) / sqrt(pow(vSD,2.0) + pow(v,2.0)));
     double sigma = sqrt(log(pow(vSD,2.0) / pow(v,2.0) + 1));
     Hosts(i,3) = rlnorm(1, mu, sigma)[0];
     Hosts(i,4) = i; // individual ID for tracking through time
+    Hosts(i,5) = Th2;
+    Hosts(i,6) = P0;
   }
   int nextID = S+I;
   
@@ -209,6 +214,8 @@ List nested_model_vary_Th2(NumericVector params) {
         Hosts(ind,0) = 0.0; // Th1 = 0
         Hosts(ind,1) = 0.0; // Th2 = 0
         Hosts(ind,3) = 0.0; // virulence = 0
+        Hosts(ind,5) = 0.0; // stored initial Th1 = 0
+        Hosts(ind,6) = 0.0; // stored initial P = 0
         S += 1;
         I -= 1;
         R += 1;
@@ -232,6 +239,8 @@ List nested_model_vary_Th2(NumericVector params) {
       Hosts(Hosts.nrow()-1,2) = 0; // initial P
       Hosts(Hosts.nrow()-1,3) = 0; // initial v
       Hosts(Hosts.nrow()-1,4) = nextID; // ID
+      Hosts(Hosts.nrow()-1,5) = 0; // initial Th2 
+      Hosts(Hosts.nrow()-1,6) = 0; // initial P
       nextID += 1; // increment ID
       S += 1;
     }
@@ -265,7 +274,8 @@ List nested_model_vary_Th2(NumericVector params) {
       whichIhosts = ifelse(randI > Iwheel, 1, 0);
       Iind = std::accumulate(whichIhosts.begin(), whichIhosts.end(), 0);
       // set the initial dose 
-      Hosts(Sind,2) = rpois(1, Hosts(Iind,2)/10)[0]; // initial P is drawn from a Poisson distribution
+      double P0 = rpois(1, Hosts(Iind,2)/10)[0];
+      Hosts(Sind,2) = P0; // initial P is drawn from a Poisson distribution
       // if the initial dose is 0, don't set anything else - this individual escaped without an infection!
       if (Hosts(Sind,2) > 0.0) { // infection was successful
         // set the initial Th1 and Th2 state of the newly infected host
@@ -277,6 +287,8 @@ List nested_model_vary_Th2(NumericVector params) {
         double mu = log(pow(Hosts(Iind,3),2.0) / sqrt(pow(vSD,2.0) + pow(Hosts(Iind,3),2.0)));
         double sigma = sqrt(log(pow(vSD,2.0) / pow(Hosts(Iind,3),2.0) + 1));
         Hosts(Sind,3) = rlnorm(1, mu, sigma)[0];
+        Hosts(Sind,5) = Th2;
+        Hosts(Sind,6) = P0;
         S -= 1;
         I += 1;
       }

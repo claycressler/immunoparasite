@@ -1,6 +1,10 @@
 setwd("~/immunoparasite")
 library(Rcpp)
 library(parallel)
+library(patchwork)
+library(tidyverse)
+library(magrittr)
+
 ## this is the version of the model where initial Th1 and Th2 are fixed
 ## based on 'exploring_within-host_dynamics.R', I know that for a fixed Th2ness (e.g., Th1=700, Th2=500)
 ## changing dose and bp will alter the dynamics. In particular, there is only a narrow range of bp values
@@ -235,25 +239,9 @@ for (th2 in seq(525,575,25)) {
 
 
 
-png(file="Epidemiological_dynamics_as_min_Th2_varies.png", height=9, width=9,  units='in', res=300)
-par(mfrow=c(5,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
-for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
-  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_3-25.RDS"))
-  ## Y axis limits
-  plot.new()
-  plot.window(xlim=c(0,max(out2[[1]][[2]][,1])), ylim=c(0,110))
-  axis(1); axis(2); box('plot')
-  nextinct=0
-  for (i in 1:50) {
-    lines(out2[[i]][[2]][,c(1,3)], col=ifelse(as.numeric(tail(out2[[i]][[2]],1)[,3])>0,1,2))
-    nextinct = nextinct + ifelse(as.numeric(tail(out2[[i]][[2]],1)[,3])>0,0,1)
-  }
-  mtext(side=1, line=2.5, "Time")
-  mtext(side=2, line=2.5, "No. infected")
-  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
-  legend(x='topright', legend=paste0("Prob(fadeout)=",nextinct/50), bty='n', text.col='red')
-}
-dev.off()
+
+ggplot(viru, aes(x=th2, y=prev)) + geom_point() + theme_bw() + xlab("Minimum Th2ness") + ylab("Evo-eco equilibrium virulence")
+
 
 png(file="Mean_burden_thru_time_as_min_Th2_varies.png", height=9, width=9,  units='in', res=300)
 par(mfrow=c(5,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
@@ -338,9 +326,19 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
       oo = filter(out3[[j]], V5==ind)
       ## Duration of any infections for this individual
       if (any(oo$V3 > 0)) {
+        # Identify runs of values > 0
+        runs <- rle(oo$V3 > 0)
+        # Split into runs
+        p_groups <- split(oo$V3, rep(seq_along(runs$lengths), runs$lengths))
+        t_groups <- split(oo$time, rep(seq_along(runs$lengths), runs$lengths))
+        # Take max of positive runs
+        max_p <- sapply(p_groups[runs$values], max)
+        max_p_t <- sapply(1:length(max_p), function(l) t_groups[runs$values][[l]][which.max(p_groups[runs$values][[l]])]-min(t_groups[runs$values][[l]]))
         times = oo$time[which(oo$V3 > 0)]
         max_age = max(times)
-        data.frame(durations = lengths(split(times, cumsum(c(1, diff(times) != 1)))),
+        data.frame(peaks = max_p,
+                   peak_time = max_p_t,
+                   durations = lengths(split(times, cumsum(c(1, diff(times) != 1)))),
                    starts = sapply(split(times, cumsum(c(1, diff(times) != 1))), min),
                    ends = sapply(split(times, cumsum(c(1, diff(times) != 1))), max)) %>%
           mutate(event=ifelse(ends==max_age, "death", 
@@ -444,3 +442,74 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
   legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
 }
 dev.off()
+
+png(file="Peak_burden_dynamics_as_min_Th2_varies.png", height=9, width=9,  units='in', res=300)
+par(mfrow=c(5,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
+  duration_data = readRDS(paste0("Duration_data_min_Th2=",th2,"_3-25.RDS"))
+  mean_peak = sd_peak = c()
+  for (t in seq(0, round(max(duration_data$ends))-150,50)) {
+    mean_peak = c(mean_peak, mean(filter(duration_data, starts >= t, starts < t+50)$peaks))
+    sd_peak = c(sd_peak, sd(filter(duration_data, starts >= t, starts < t+50)$peaks))
+    
+  }
+  plot(seq(0, round(max(duration_data$ends))-150,50), mean_peak, type='l', lwd=2, xaxt='n', xlab='', ylab='', ylim=c(0,250))
+  lines(seq(0, round(max(duration_data$ends))-150,50), mean_peak+sd_peak, lwd=2, lty=2)
+  lines(seq(0, round(max(duration_data$ends))-150,50), mean_peak-sd_peak, lwd=2, lty=2)
+  mtext(side=1, line=2.5, "Infection interval")
+  mtext(side=2, line=2.5, "Peak burden")
+  axis(1, 
+       tick=TRUE, 
+       at=seq(0, round(max(duration_data$ends))-150, 50), 
+       labels=paste0("[",seq(0, round(max(duration_data$ends))-150, 50),",",seq(50, round(max(duration_data$ends))-100, 50),")"))
+  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
+}
+dev.off()
+
+## New simulations after updating the simulation code to record the initial Th2 and initial P0 for
+## every infection (4/9/26)
+library(Rcpp)
+library(parallel)
+sourceCpp("nested_model_vary_Th2.cpp")
+
+
+
+par(mfrow=c(2,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in c(seq(200,400,50))) {#,seq(525,600,25),seq(650,750,50))) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
+  ## Y axis limits
+  plot.new()
+  plot.window(xlim=c(0,max(out2[[1]][[2]][,1])), ylim=c(0,110))
+  axis(1); axis(2); box('plot')
+  nextinct=0
+  for (i in 1:50) {
+    lines(out2[[i]][[2]][,c(1,3)], col=ifelse(as.numeric(tail(out2[[i]][[2]],1)[,3])>0,1,2))
+    nextinct = nextinct + ifelse(as.numeric(tail(out2[[i]][[2]],1)[,3])>0,0,1)
+  }
+  mtext(side=1, line=2.5, "Time")
+  mtext(side=2, line=2.5, "No. infected")
+  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
+  legend(x='topright', legend=paste0("Prob(fadeout)=",nextinct/50), bty='n', text.col='red')
+}
+
+par(mfrow=c(2,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in c(seq(200,400,50))) {#,seq(525,600,25),seq(650,750,50))) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
+  plot.new()
+  plot.window(xlim=c(0,max(out2[[1]][[2]][,1])), ylim=c(0,2e-3))
+  axis(1); axis(2); box('plot')
+  for (i in 1:50) {
+    vseq = out2[[i]][[2]][,6]
+    if (any(is.na(vseq))) {
+      out2[[i]][[2]][which(is.na(vseq)):length(vseq),6] = NA
+      lines(out2[[i]][[2]][,c(1,6)], col='red')
+    }
+    else lines(out2[[i]][[2]][,c(1,6)], col=gray(0.7))
+  }
+  lines(out2[[i]][[2]][,1], sapply(out2, function(o) o[[2]][,6]) %>% apply(., 1, function(q) mean(q,na.rm=T)), lwd=2)
+  mtext(side=1, line=2.5, "Time")
+  mtext(side=2, line=2.5, "Per-parasite virulence")
+  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
+  
+}
+
