@@ -26,6 +26,23 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
   saveRDS(out, file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
 }
 
+th2=575
+params = c(S1=1000, S2=1000, s1=2000, s2=2000,
+           b1=0.1, b2=0.1, I12=10000, I21=10000,
+           m=0.9, c1=50, c2=130, C1=50, C2=50,
+           bp=8, Kp=300, a=0.004,
+           b=1e-1, K=100,
+           c=3e-3, v=1e-4, v0=1e-4, cv_v=0.5,
+           tmax=1500, S0=95, I0=5,
+           minTh2=th2,maxTh2=800,timestep=1)
+tIn <- Sys.time()
+mclapply(1:50,
+         function(x) nested_model_vary_Th2(params),
+         mc.cores=12) -> out
+tOut <- Sys.time()
+print(tOut-tIn)
+saveRDS(out, file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_5-11.RDS"))
+
 within_host_model_det = function(t, y, params) {
   s1 <- params["s1"]
   s2 <- params["s2"]
@@ -258,7 +275,7 @@ dev.off()
 prev = viru = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
 iii = 1
 for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
-  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_3-25.RDS"))
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
   prev[[iii]] = data.frame(prev=unlist(lapply(out2, function(o) tail(o[[2]][,3],1)))/100, th2=th2)
   viru[[iii]] = data.frame(prev=unlist(lapply(out2, function(o) tail(o[[2]][,6],1)))/100, th2=th2)
   iii = iii+1
@@ -267,7 +284,7 @@ prev %<>% do.call("rbind.data.frame",.)
 viru %<>% do.call("rbind.data.frame",.)
 
 th2 = 200
-out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_3-25.RDS"))
+out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
 lapply(1:length(out2), 
        function(i) data.frame(time= out2[[i]][[2]][,1], 
                               infecteds=out2[[i]][[2]][,3]/100, 
@@ -276,18 +293,18 @@ lapply(1:length(out2),
                               ind=i)) %>%
   do.call("rbind.data.frame",.) -> o200
 
-th2 = 550
-out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_3-25.RDS"))
+th2 = 575
+out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
 lapply(1:length(out2), 
        function(i) data.frame(time= out2[[i]][[2]][,1], 
                               infecteds=out2[[i]][[2]][,3]/100, 
                               v=out2[[i]][[2]][,6], 
                               color=ifelse(any(out2[[i]][[2]][,3]==0),0,1),
                               ind=i)) %>%
-  do.call("rbind.data.frame",.) -> o550
+  do.call("rbind.data.frame",.) -> o575
 
 th2 = 700
-out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_3-25.RDS"))
+out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
 lapply(1:length(out2), 
        function(i) data.frame(time= out2[[i]][[2]][,1], 
                               infecteds=out2[[i]][[2]][,3]/100, 
@@ -308,12 +325,12 @@ ggplot(o200, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) +
   theme(legend.position="none")  -> p1
 
 
-ggplot(o550, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) + 
+ggplot(o575, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) + 
   geom_line() + 
   scale_color_manual(values=c("0"="red", "1"="gray")) + 
   geom_line(aes(x=time, y=meanI), linewidth=1, color="#E69F00", data=(o550 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanI=mean(infecteds))), inherit.aes=FALSE) + 
   xlab("Time") + ylab("Prevalence") + ylim(0,1) + 
-  annotate("text", x=-Inf, y=Inf, label="Min Th2=550", hjust=-0.25, vjust=2, color="#E69F00", size=2.75) +
+  annotate("text", x=-Inf, y=Inf, label="Min Th2=575", hjust=-0.25, vjust=2, color="#E69F00", size=2.75) +
   annotate("text", x=Inf, y=-Inf, label=paste0("P(fadeout)=",1-sum(filter(o550, time==max(time))$color)/50), hjust=1.25, vjust=-1.5, color="red", size=2.75) +
   theme_bw() + 
   theme(legend.position="none")  -> p2
@@ -330,37 +347,180 @@ ggplot(o700, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) +
 
 prev$color = "black"
 prev$color[which(prev$th2==200)] = "#0072B2"
-prev$color[which(prev$th2==550)] = "#E69F00"
+prev$color[which(prev$th2==575)] = "#E69F00"
 prev$color[which(prev$th2==700)] = "#009E73"
 
 ggplot(prev, aes(x=th2, y=prev, color=color)) + 
   geom_point() + 
   scale_color_manual(values=c("black"="black", "#0072B2"="#0072B2", "#E69F00"="#E69F00", "#009E73"="#009E73")) + 
   theme_bw() + 
-  scale_x_continuous(breaks=c(200, 400, 550, 600, 700, 800)) + 
-  theme(axis.text.x = element_text(face=c("bold","plain","bold","plain","bold","plain"),
-                                   colour=c("#0072B2","black","#E69F00","black","#009E73","black")),
-        legend.position='none') +
+  theme(legend.position='none') +
   xlab("Minimum Th2") + 
   ylab("Prevalence at final time") -> p4.1
 
 
-ggplot(prev, aes(x=as.factor(th2), y=prev, color=color)) + 
-  geom_boxplot() + 
-  scale_color_manual(values=c("black"="black", "#0072B2"="#0072B2", "#E69F00"="#E69F00", "#009E73"="#009E73")) + 
-  theme_bw() + 
-  theme(axis.text.x = element_text(face=c("bold",rep("plain",7),"bold",rep("plain",3),"bold","plain"),
-                                   colour=c("#0072B2",rep("black",7),"#E69F00",rep("black",3),"#009E73","black")),
-        legend.position='none') +
-  xlab("Minimum Th2ness") + 
-  ylab("Evo-eco equilibrium prevalence") -> p4.2
-
-png(file="Epidemiological_dynamics_summary_fig.png", width=8, height=6, units='in', res=400)
+png(file="Fig2_Epidemiological_dynamics_Phil_Trans.png", width=8, height=6, units='in', res=400)
 left = p1 / p2 / p3
 left | p4.1
 dev.off()
 
-png(file="Epidemiological_dynamics_summary_fig_2.png", width=8, height=6, units='in', res=400)
+###############################################################################
+###############################################################################
+###############################################################################
+
+## Figure 3
+
+ggplot(filter(o200, color==1), aes(x=time, y=v, group=ind, color=as.factor(color))) + 
+  geom_line() + 
+  scale_color_manual(values=c("0"="red", "1"="gray")) + 
+  geom_line(aes(x=time, y=meanv), linewidth=1, color="#0072B2", data=(o200 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanv=mean(v))), inherit.aes=FALSE) + 
+  xlab("Time") + ylab("Mean virulence") + ylim(0,0.001) + 
+  annotate("text", x=-Inf, y=Inf, label="Min Th2=200", hjust=-0.25, vjust=2, color="#0072B2", size=2.75) +
+  theme_bw() + 
+  theme(legend.position="none")  -> p1
+
+
+ggplot(filter(o575, color==1), aes(x=time, y=v, group=ind, color=as.factor(color))) + 
+  geom_line() + 
+  scale_color_manual(values=c("0"="red", "1"="gray")) + 
+  geom_line(aes(x=time, y=meanv), linewidth=1, color="#E69F00", data=(o575 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanv=mean(v))), inherit.aes=FALSE) + 
+  xlab("Time") + ylab("Mean virulence") + ylim(0,0.001) + 
+  annotate("text", x=-Inf, y=Inf, label="Min Th2=575", hjust=-0.25, vjust=2, color="#E69F00", size=2.75) +
+  theme_bw() + 
+  theme(legend.position="none")  -> p2
+
+ggplot(filter(o700, color==1), aes(x=time, y=v, group=ind, color=as.factor(color))) + 
+  geom_line() + 
+  scale_color_manual(values=c("0"="red", "1"="gray")) + 
+  geom_line(aes(x=time, y=meanv), linewidth=1, color="#009E73", data=(o700 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanv=mean(v))), inherit.aes=FALSE) + 
+  xlab("Time") + ylab("Mean virulence") + ylim(0,0.001) + 
+  annotate("text", x=-Inf, y=Inf, label="Min Th2=700", hjust=-0.25, vjust=2, color="#009E73", size=2.75) +
+  theme_bw() + 
+  theme(legend.position="none")  -> p3
+
+viru$color = "black"
+viru$color[which(viru$th2==200)] = "#0072B2"
+viru$color[which(viru$th2==575)] = "#E69F00"
+viru$color[which(viru$th2==700)] = "#009E73"
+
+ggplot(filter(viru, prev > 0), aes(x=th2, y=prev, color=color)) + 
+  geom_point() + 
+  scale_color_manual(values=c("black"="black", "#0072B2"="#0072B2", "#E69F00"="#E69F00", "#009E73"="#009E73")) + 
+  theme_bw() + 
+  theme(legend.position='none') +
+  xlab("Minimum Th2") + 
+  ylab("Virulence at final time") -> p4.1
+
+
+png(file="Fig3_Evolutionary_dynamics_Phil_Trans.png", width=8, height=6, units='in', res=400)
 left = p1 / p2 / p3
-left | p4.2
+left | p4.1
 dev.off()
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+## Figure 4
+
+
+## Compute information about the duration of each individual infection and the ultimate outcome of infection (peak infection, clearance, death, neither)
+for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
+  print(th2)
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
+  out3 = vector(mode='list', length=length(out2))
+  for (j in 1:length(out2)) {
+    for (i in 1:length(out2[[j]][[1]])) {
+      as.data.frame(out2[[j]][[1]][[i]], col.names=c("Th1","Th2","P","v","id")) %>%
+        mutate(time=i) -> out2[[j]][[1]][[i]]
+    }
+    out3[[j]] = do.call("rbind.data.frame", out2[[j]][[1]])
+  }
+  ## Calculate infection duration for every individual infection
+  duration_data = vector(mode='list', length=length(out3))
+  for (j in 1:length(out3)) {
+    inds = unique(out3[[j]]$V5)
+    infection_data = vector(mode='list', length=length(inds))
+    for (i in 1:length(inds)) {
+      ind = inds[i]
+      oo = filter(out3[[j]], V5==ind)
+      ## Duration of any infections for this individual
+      if (any(oo$V3 > 0)) {
+        # Identify runs of values > 0
+        runs <- rle(oo$V3 > 0)
+        # Split into runs
+        p_groups <- split(oo$V3, rep(seq_along(runs$lengths), runs$lengths))
+        t_groups <- split(oo$time, rep(seq_along(runs$lengths), runs$lengths))
+        # Take max of positive runs
+        max_p <- sapply(p_groups[runs$values], max)
+        max_p_t <- sapply(1:length(max_p), function(l) t_groups[runs$values][[l]][which.max(p_groups[runs$values][[l]])]-min(t_groups[runs$values][[l]]))
+        times = oo$time[which(oo$V3 > 0)]
+        max_age = max(times)
+        data.frame(peaks = max_p,
+                   peak_time = max_p_t,
+                   durations = lengths(split(times, cumsum(c(1, diff(times) != 1)))),
+                   starts = sapply(split(times, cumsum(c(1, diff(times) != 1))), min),
+                   ends = sapply(split(times, cumsum(c(1, diff(times) != 1))), max)) %>%
+          mutate(event=ifelse(ends==max_age, "death", 
+                              ifelse(max_age<max(out3[[j]]$time), "clearance", "censored"))) -> infection_data[[i]]
+      }
+    }
+    duration_data[[j]] = do.call("rbind.data.frame", infection_data)
+  }
+  duration_data = do.call("rbind.data.frame", duration_data)
+  
+  ## durations are calculated as if the timestep over which data was recorded was dt=1
+  ## If that is not true, then every time in duration_data needs to be multiplied by dt
+  dt = min(diff(out2[[1]][[2]][,1]))
+  duration_data %<>% 
+    mutate(durations = dt*durations,
+           starts = dt*starts,
+           ends= dt*ends)
+  
+  saveRDS(duration_data, paste0("Duration_data_min_Th2=",th2,"_4-9.RDS"))
+}
+
+## Probability of clearance
+par(mfrow=c(5,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
+for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
+  duration_data <- readRDS(file=paste0("Duration_data_min_Th2=",th2,"_4-9.RDS"))
+  prob_clear = var_clear = c()
+  for (t in seq(0, 450, 50)) {
+    filter(duration_data, starts >= t, starts < t+50) %>% 
+      mutate(event_code=ifelse(event=="clearance",1,ifelse(event=="death",2,0))) %>%
+      with(., cuminc(ftime=durations, fstatus=event_code)) -> ci
+    prob_clear = c(prob_clear, tail(ci[[1]]$est,1))
+    var_clear = c(var_clear, tail(ci[[1]]$var,1))
+  }
+  plot(seq(0, 450, 50), prob_clear, type='l', lwd=2, xaxt='n', xlab='', ylab='', ylim=c(0,1))
+  mtext(side=1, line=2.5, "Infection interval")
+  mtext(side=2, line=2.5, "Clearance probability")
+  axis(1, 
+       tick=TRUE, 
+       at=seq(0, round(max(duration_data$ends))-150, 50), 
+       labels=paste0("[",seq(0, round(max(duration_data$ends))-150, 50),",",seq(50, round(max(duration_data$ends))-100, 50),")"))
+  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
+}
+
+
+
+for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
+  ## For individuals whose infections started at different time intervals, what was the peak infection
+  for (t in seq(0, 475, 25)) {
+    filter(duration_data, starts >= t, starts < t+50) %>% 
+      mutate(event_code=ifelse(event=="clearance",1,ifelse(event=="death",2,0))) %>%
+      with(., cuminc(ftime=durations, fstatus=event_code)) -> ci
+    prob_clear = c(prob_clear, tail(ci[[1]]$est,1))
+    var_clear = c(var_clear, tail(ci[[1]]$var,1))
+  }
+  plot(seq(0, round(max(duration_data$ends))-150,50), prob_clear, type='l', lwd=2, xaxt='n', xlab='', ylab='', ylim=c(0,1))
+  mtext(side=1, line=2.5, "Infection interval")
+  mtext(side=2, line=2.5, "Clearance probability")
+  axis(1, 
+       tick=TRUE, 
+       at=seq(0, round(max(duration_data$ends))-150, 50), 
+       labels=paste0("[",seq(0, round(max(duration_data$ends))-150, 50),",",seq(50, round(max(duration_data$ends))-100, 50),")"))
+  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
+}
+
