@@ -482,16 +482,6 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
 
 ## Probability of clearance
 par(mfrow=c(5,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
-for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
-  duration_data <- readRDS(file=paste0("Duration_data_min_Th2=",th2,"_4-9.RDS"))
-  prob_clear = var_clear = c()
-  for (t in seq(0, 450, 50)) {
-    filter(duration_data, starts >= t, starts < t+50) %>% 
-      mutate(event_code=ifelse(event=="clearance",1,ifelse(event=="death",2,0))) %>%
-      with(., cuminc(ftime=durations, fstatus=event_code)) -> ci
-    prob_clear = c(prob_clear, tail(ci[[1]]$est,1))
-    var_clear = c(var_clear, tail(ci[[1]]$var,1))
-  }
   plot(seq(0, 450, 50), prob_clear, type='l', lwd=2, xaxt='n', xlab='', ylab='', ylim=c(0,1))
   mtext(side=1, line=2.5, "Infection interval")
   mtext(side=2, line=2.5, "Clearance probability")
@@ -502,25 +492,91 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
   legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
 }
 
+library(survival)
 
-
+infection_durations = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
+i = 1
 for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
-  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
-  ## For individuals whose infections started at different time intervals, what was the peak infection
-  for (t in seq(0, 475, 25)) {
+  duration_data = readRDS(paste0("Duration_data_min_Th2=",th2,"_4-9.RDS"))
+  mean_duration = c()
+  se_duration = c()
+  for (t in seq(0, 450, 50)) {
+    filter(duration_data, starts >= t, starts < t+50) %>% 
+      mutate(event_code = ifelse(event!="censored",1,0)) %>% 
+      with(., survfit(Surv(time = durations, event = event_code)~1)) -> km_fit
+    mean_duration = c(mean_duration, summary(km_fit)$table["rmean"])
+    se_duration = c(se_duration, summary(km_fit)$table["se(rmean)"])
+  }
+  infection_durations[[i]] = data.frame(tint=seq(0,450,50),
+                                        mean_duration=mean_duration,
+                                        se_duration=se_duration,
+                                        minTh2=th2)
+  i = i + 1
+}
+infection_durations %<>% do.call("rbind",.)
+
+infection_peaks = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
+i = 1
+for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
+  duration_data = readRDS(paste0("Duration_data_min_Th2=",th2,"_4-9.RDS"))
+  mean_peak = c()
+  se_peak = c()
+  for (t in seq(0, 450, 50)) {
+    filter(duration_data, starts >= t, starts < t+50) -> dat
+    mean_peak = c(mean_peak, mean(dat$peaks))
+    se_peak = c(se_peak, sd(dat$peaks)/sqrt(nrow(dat)))
+  }
+  infection_peaks[[i]] = data.frame(tint=seq(0,450,50),
+                                        mean_peak=mean_peak,
+                                        se_peak=se_peak,
+                                        minTh2=th2)
+  i = i + 1
+}
+infection_peaks %<>% do.call("rbind",.)
+
+infection_clearance = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
+i = 1
+for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
+  duration_data <- readRDS(file=paste0("Duration_data_min_Th2=",th2,"_4-9.RDS"))
+  prob_clear = se_clear = c()
+  for (t in seq(0, 450, 50)) {
     filter(duration_data, starts >= t, starts < t+50) %>% 
       mutate(event_code=ifelse(event=="clearance",1,ifelse(event=="death",2,0))) %>%
       with(., cuminc(ftime=durations, fstatus=event_code)) -> ci
     prob_clear = c(prob_clear, tail(ci[[1]]$est,1))
-    var_clear = c(var_clear, tail(ci[[1]]$var,1))
+    se_clear = c(se_clear, sqrt(tail(ci[[1]]$var,1))/sqrt(nrow(filter(duration_data, starts >= t, starts < t+50))))
   }
-  plot(seq(0, round(max(duration_data$ends))-150,50), prob_clear, type='l', lwd=2, xaxt='n', xlab='', ylab='', ylim=c(0,1))
-  mtext(side=1, line=2.5, "Infection interval")
-  mtext(side=2, line=2.5, "Clearance probability")
-  axis(1, 
-       tick=TRUE, 
-       at=seq(0, round(max(duration_data$ends))-150, 50), 
-       labels=paste0("[",seq(0, round(max(duration_data$ends))-150, 50),",",seq(50, round(max(duration_data$ends))-100, 50),")"))
-  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
+  infection_clearance[[i]] = data.frame(tint=seq(0,450,50),
+                                        mean_prob=prob_clear,
+                                        se_prob=se_clear,
+                                        minTh2=th2)
+  i = i + 1
 }
+infection_clearance %<>% do.call("rbind",.)
 
+
+library(ggpubfigs)
+
+
+merge(merge(infection_clearance, infection_durations), infection_peaks) %>% 
+  pivot_longer(., cols=c(3,5,7), names_to="Component", values_to="Values") %>%
+  filter(., minTh2%in%c(200,300,400,500,550,575,600,650,700,750)) -> dat
+dat$Component = factor(dat$Component, levels=c("mean_prob", "mean_duration", "mean_peak"))
+
+png(file="Fig4_Fitness_components_Phil_Trans.png", width=5, height=3, units='in', res=400)
+dat %>%
+  ggplot(., aes(x=tint, y=Values, group=minTh2, color=factor(minTh2))) + 
+  geom_line() + 
+  scale_color_manual(values = friendly_pal("glasbey_twelve")) + 
+  facet_wrap(.~Component, scales="free", labeller=labeller(Component = c("mean_duration"="Infection duration", "mean_peak"="Peak burden", "mean_prob"="Clearance probability"))) + 
+  theme_bw() + 
+  xlab("Infection start time") + 
+  ylab("Fitness component") + 
+  labs(color="Min. Th2") + 
+  theme(legend.position="bottom",
+        legend.key.size=unit(0.5,"cm"),
+        legend.text=element_text(size=8),
+        legend.title=element_text(size=10),
+        legend.spacing.y=unit(2,"mm"),
+        legend.margin=margin(1,1,1,1))
+dev.off()
