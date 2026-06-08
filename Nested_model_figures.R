@@ -177,7 +177,7 @@ det_grid %>%
   geom_tile() + 
   annotate("text", x=-Inf, y=Inf, label="A", hjust=-2, vjust=2, color="black", size=4.5) +
   xlab("Initial Th2") + ylab("Initial P") + 
-  scale_fill_manual(labels=c("High T1+2, Low P", "High T1, High P", "High T2, Zero P"), values=c("1"="gray", "2"="red", "3"="black")) + 
+  scale_fill_manual(labels=c("High T1+2, Low P", "High T1, High P", "High T2, Zero P"), values=c("1"="gray", "2"="red", "3"="blue")) + 
   labs(fill="") +
   theme_bw() + 
   theme(legend.position="bottom",
@@ -202,7 +202,7 @@ stoch_outcomes %>%
   ggplot(., aes(x=Th2, y=P, z=p_extinct)) + 
   geom_contour_filled(aes(fill=after_stat(level_mid))) + 
   scale_fill_gradient(low="red", 
-                      high="black", 
+                      high="blue", 
                       limits=c(0,1), 
                       oob=scales::squish,
                       guide=guide_colorbar(
@@ -480,18 +480,6 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
   saveRDS(duration_data, paste0("Duration_data_min_Th2=",th2,"_4-9.RDS"))
 }
 
-## Probability of clearance
-par(mfrow=c(5,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
-  plot(seq(0, 450, 50), prob_clear, type='l', lwd=2, xaxt='n', xlab='', ylab='', ylim=c(0,1))
-  mtext(side=1, line=2.5, "Infection interval")
-  mtext(side=2, line=2.5, "Clearance probability")
-  axis(1, 
-       tick=TRUE, 
-       at=seq(0, round(max(duration_data$ends))-150, 50), 
-       labels=paste0("[",seq(0, round(max(duration_data$ends))-150, 50),",",seq(50, round(max(duration_data$ends))-100, 50),")"))
-  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
-}
-
 library(survival)
 
 infection_durations = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
@@ -555,28 +543,75 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
 infection_clearance %<>% do.call("rbind",.)
 
 
-library(ggpubfigs)
-
-
 merge(merge(infection_clearance, infection_durations), infection_peaks) %>% 
   pivot_longer(., cols=c(3,5,7), names_to="Component", values_to="Values") %>%
   filter(., minTh2%in%c(200,300,400,500,550,575,600,650,700,750)) -> dat
 dat$Component = factor(dat$Component, levels=c("mean_prob", "mean_duration", "mean_peak"))
 
-png(file="Fig4_Fitness_components_Phil_Trans.png", width=5, height=3, units='in', res=400)
 dat %>%
   ggplot(., aes(x=tint, y=Values, group=minTh2, color=factor(minTh2))) + 
   geom_line() + 
-  scale_color_manual(values = friendly_pal("glasbey_twelve")) + 
-  facet_wrap(.~Component, scales="free", labeller=labeller(Component = c("mean_duration"="Infection duration", "mean_peak"="Peak burden", "mean_prob"="Clearance probability"))) + 
+  scale_color_manual(values = colorRampPalette(c("red", "blue"))(10)) +
+  facet_wrap(.~Component, scales="free", labeller=labeller(Component = c("mean_duration"="B. Infection duration", "mean_peak"="C. Peak burden", "mean_prob"="A. Clearance probability"))) + 
   theme_bw() + 
   xlab("Infection start time") + 
   ylab("Fitness component") + 
-  labs(color="Min. Th2") + 
-  theme(legend.position="bottom",
-        legend.key.size=unit(0.5,"cm"),
-        legend.text=element_text(size=8),
-        legend.title=element_text(size=10),
-        legend.spacing.y=unit(2,"mm"),
-        legend.margin=margin(1,1,1,1))
+  labs(color=NULL) + 
+  theme(legend.position="bottom") -> p_base
+leg <- get_legend(p_base)
+
+legend_row <- plot_grid(
+  ggdraw() + draw_label("Th1-biased", hjust = -1, x = 0, size = 10, color="red"),
+  leg,
+  ggdraw() + draw_label("Th2-biased", hjust = 2, x = 1, size = 10, color="blue"),
+  nrow = 1,
+  rel_widths = c(0.24, 0.52, 0.24)
+)
+
+final_plot <- plot_grid(
+  p_base + theme(legend.position = "none"),
+  legend_row,
+  ncol = 1,
+  rel_heights = c(1, 0.2)
+)
+
+
+
+png(file="Fig4_Fitness_components_Phil_Trans.png", width=6, height=4, units='in', res=400)
+final_plot
+dev.off()
+
+
+#########################################################################
+
+out2 <- readRDS(file="Nested_model_variable_dose_min_Th2=575_5-11.RDS")
+lapply(1:length(out2), 
+       function(i) data.frame(time= out2[[i]][[2]][,1], 
+                              infecteds=out2[[i]][[2]][,3]/100, 
+                              v=out2[[i]][[2]][,6], 
+                              color=ifelse(any(out2[[i]][[2]][,3]==0),0,1),
+                              ind=i)) %>%
+  do.call("rbind.data.frame",.) -> o575
+
+ggplot(o575, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) + 
+  geom_line() + 
+  scale_color_manual(values=c("0"="red", "1"="gray")) + 
+  geom_line(aes(x=time, y=meanI), linewidth=1, color="#0072B2", data=(o575 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanI=mean(infecteds))), inherit.aes=FALSE) + 
+  xlab("Time") + ylab("Prevalence") + ylim(0,1) + 
+  annotate("text", x=-Inf, y=Inf, label="Min Th2=575", hjust=-0.25, vjust=2, color="#0072B2", size=2.75) +
+  annotate("text", x=Inf, y=-Inf, label=paste0("P(fadeout)=",1-sum(filter(o575, time==max(time))$color)/50), hjust=1.25, vjust=-1.5, color="red", size=2.75) +
+  theme_bw() + 
+  theme(legend.position="none")  -> p1
+
+ggplot(filter(o575, color==1), aes(x=time, y=v, group=ind, color=as.factor(color))) + 
+  geom_line() + 
+  scale_color_manual(values=c("0"="red", "1"="gray")) + 
+  geom_line(aes(x=time, y=meanv), linewidth=1, color="#E69F00", data=(o575 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanv=mean(v))), inherit.aes=FALSE) + 
+  xlab("Time") + ylab("Mean virulence") + ylim(0,0.001) + 
+  annotate("text", x=-Inf, y=Inf, label="Min Th2=575", hjust=-0.25, vjust=2, color="#E69F00", size=2.75) +
+  theme_bw() + 
+  theme(legend.position="none")  -> p2
+
+png(file="FigS1_Extended_timestep_runs.png", width=5, height=3, units='in', res=400)
+p1 + p2
 dev.off()
