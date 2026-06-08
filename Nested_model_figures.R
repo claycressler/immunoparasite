@@ -615,3 +615,27 @@ ggplot(filter(o575, color==1), aes(x=time, y=v, group=ind, color=as.factor(color
 png(file="FigS1_Extended_timestep_runs.png", width=5, height=3, units='in', res=400)
 p1 + p2
 dev.off()
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+## Figure 5
+
+ESS5 = read.csv("Fig5_ESS_5.csv")
+ESS10 = read.csv("Fig5_ESS_10.csv")
+ESS20 = read.csv("Fig5_ESS_20.csv")
+ESSb = read.csv("Fig5_ESS_baseline.csv")
+
+png(filename="Fig5_ESS_result_Phil_Trans.png", height=5, width=6, units='in', res=400)
+par(mfrow=c(1,2), mar=c(4,2,0.5,0.5), oma=c(0,2,0,0))
+plot(ESS5, xlab=expression("Clearance probability"~p), ylab="", type='l', lwd=2, xlim=c(0.6,1), col="#0072B2")
+lines(ESS10, lwd=2, col= "#009E73")
+lines(ESS20, lwd=2, col="#E69F00")
+mtext("ESS virulence", side=3, line=0, outer=T)
+legend(x=0.6, y=0.01, xjust=0.15, yjust=0.5, fill=c("#0072B2","#009E73","#E69F00"), legend=c(expression(gamma==0.2),expression(gamma==0.1),expression(gamma==0.05)), bty='n')
+legend(x=0.6, y=0.044, xjust=0.5, yjust=0.5, legend="A", bty="n")
+
+plot(ESSb, xlab=expression("Clearance rate"~gamma), ylab="", type='l', lwd=2, col=1)
+legend(x=0, y=0.044, legend="B", xjust=0.5, yjust=0.5, bty='n')
+dev.off()
