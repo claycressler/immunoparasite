@@ -1,0 +1,475 @@
+---
+title: "InfectionDurationSuppInfo"
+author: "Clay Cressler"
+date: "2023-03-22"
+output: bookdown::html_document2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      dev=c('png','tiff'),
+                      fig.path='figures/')
+library(ggplot2)
+library(tidyverse)
+library(deSolve)
+library(rootSolve)
+```
+
+The code below simulates the dimensionless model for a wide range of initial parasite and immune conditions, across a range of values for the parameters $\iota_{12} = \iota_{21}$ and for $\chi_1$ and $\chi_2$. 
+The dimensionless parameters $\iota_{12} = \iota_{21}$ are calculated as the ratio of the half-saturation constants for self-activation and cross-inhibition, so decreasing their values implies that cross-inhibition is becoming more sensitive to an increase in T cell abundance.
+For simplicity, we just assume that these are equal, and evaluate the outcomes for values between 20 (self-activation is twenty-fold more sensitive to changes in T-cell abundance than cross-inhibition) to 0.5 ( .
+We do not hold $\chi_1$ and $\chi_2$ to be equal as they vary, however.
+In particular, we vary a parameter $\epsilon$ between 0 and 0.5, and define $\chi_1 = (1-\epsilon)\chi$ and $\chi_2 = (1+\epsilon)\chi$.
+The parameter $\chi$ then quantifies the activation of the immune response by the parasite, so increasing $\epsilon$ implies that the parasite is increasingly biased in its activation of Th2 versus Th1 immunity.
+We explore a range of parameter values to study how the possible dynamical outcomes change.
+
+```{r, echo=FALSE}
+dimensionless_modelR = function(y, parms) {
+
+  b1 = parms[1]
+  b2 = parms[2]
+  s1 = parms[3]
+  s2 = parms[4]
+  i12 = parms[5]
+  i21 = parms[6]
+  k1 = parms[7]
+  k2 = parms[8]
+  c1 = parms[9]
+  c2 = parms[10]
+  r = parms[11]
+  a = parms[12]
+  
+  y1dot = b1 + c1*y[3]/(k1+y[3]) + s1*y[1]*y[1]/(1+y[1]*y[1]) * i12/(i12+y[2]) - y[1];
+  y2dot = b2 + c2*y[3]/(k2+y[3]) + s2*y[2]*y[2]/(1+y[2]*y[2]) * i21/(i21+y[1]) - y[2];
+  y3dot = r*y[3]*(1-y[3]) - a*y[3]*y[2];
+  
+  c(y1dot,y2dot,y3dot)
+}
+
+dimensionless_modelJ = function(t, y, parms) {
+
+  b1 = parms[1]
+  b2 = parms[2]
+  s1 = parms[3]
+  s2 = parms[4]
+  i12 = parms[5]
+  i21 = parms[6]
+  k1 = parms[7]
+  k2 = parms[8]
+  c1 = parms[9]
+  c2 = parms[10]
+  r = parms[11]
+  a = parms[12]
+  
+  y1dot = b1 + c1*y[3]/(k1+y[3]) + s1*y[1]*y[1]/(1+y[1]*y[1]) * i12/(i12+y[2]) - y[1];
+  y2dot = b2 + c2*y[3]/(k2+y[3]) + s2*y[2]*y[2]/(1+y[2]*y[2]) * i21/(i21+y[1]) - y[2];
+  y3dot = r*y[3]*(1-y[3]) - a*y[3]*y[2];
+  
+  return(list(c(y1dot,y2dot,y3dot)))
+}
+
+
+```
+
+```{r, echo=FALSE, eval=TRUE}
+dyn.load("dimensionless_model.dll")
+
+for (iij in c(20,10,5,1,0.5)) {
+  results = data.frame(initT=rep(NA,6*10*101*101),
+                       initTh1=rep(NA,6*10*101*101),
+                       initP=rep(NA,6*10*101*101),
+                       t=rep(NA,6*10*101*101),
+                       Th1=rep(NA,6*10*101*101),
+                       Th2=rep(NA,6*10*101*101),
+                       P=rep(NA,6*10*101*101),
+                       Th1bias=rep(NA,6*10*101*101),
+                       Th2bias=rep(NA,6*10*101*101),
+                       outcome=rep(NA,6*10*101*101))
+  i = 1
+  for (rel in seq(0,0.5,0.1)) {
+    print(rel)
+    for (totalI in seq(0.2,2,0.2)) {
+      print(totalI)
+      for (Th1.0 in seq(0,totalI,totalI/100)) {
+        print(Th1.0)
+        for (P.0 in seq(0.01,0.2,0.19/100)) {
+          params = c(b1=0.000111111, b2=.000111111, 
+                     s1=2.22222, s2=2.22222, 
+                     i12=iij, i21=iij, 
+                     k1=1/6, k2=1/6, 
+                     c1=(1-rel)*0.111111, c2=(1+rel)*0.111111, 
+                     r=3.33333, a=3.33333)
+          y0 = c(Th1=Th1.0, Th2=totalI-Th1.0, P=P.0)
+          times = seq(0,100)
+          out = ode(y0, times, func="derivs", parms=params, dllname="dimensionless_model", initfunc="initmod", atol=1e-14, rtol=1e-14)
+          
+          while((abs(diff(tail(out[,2],2))) > 1e-12 | abs(diff(tail(out[,3],2))) > 1e-12 | abs(diff(tail(out[,4],2))) > 1e-12) & tail(out[,1],1) < 5000) {
+            #print(paste("more simulation required for", rel,totalI,Th1.0,P.0))
+            times = seq(tail(out[,1],1),tail(out[,1],1)+100,1)
+            y0 = c(Th1=tail(out[,"Th1"],1),Th2=tail(out[,"Th2"],1),P=tail(out[,"P"],1))
+            out = ode(y0, times, func="derivs", parms=params, dllname="dimensionless_model", initfunc="initmod", atol=1e-14, rtol=1e-14)
+            if (out[101,4] < 0) {
+              #print("generating negative values"); print(rel); print(iij); print(y0); 
+              out[101,4] = 0} # catch negatives
+          }
+          ## Classify the equilibrium reached (so long as the final t < 5000)
+          if (tail(out[,1],1) < 5000) {
+            ## Calculate the stability of the equilibrium
+            equilStab = eigen(jacobian.full(y=as.numeric(tail(out[,2:4],1)),
+                                            func=dimensionless_modelJ, 
+                                            parms=params))$values
+            if (all(Re(equilStab) < 0)) {## this equilibrium is stable, classify it
+              if (tail(out[,"Th1"],1) < 0.1 & tail(out[,"Th2"],1) > 1 & tail(out[,"P"],1) < 1e-9)
+                outcome = 1 ## Th2 polarization
+              else if (tail(out[,"Th1"],1) > 0.8 & tail(out[,"Th2"],1) > 0.8 & tail(out[,"P"],1) < 0.2)
+                outcome = 2 ## High Th1+Th2
+              else if (tail(out[,"Th1"],1) > 0.9 & tail(out[,"Th2"],1) < 0.3 & tail(out[,"P"],1) > 0.6)
+                outcome = 3 ## Th1 polarization
+              else outcome = 4 ## Low Th1+Th2
+            } else outcome = 5 ## Saddle
+          } else outcome = 6 ## Cycling
+          results[i,] <- c(totalI,
+                          Th1.0,
+                          P.0,
+                          tail(out[,"time"],1),
+                          round(tail(out[,"Th1"],1),3),
+                          round(tail(out[,"Th2"],1),3),
+                          round(tail(out[,"P"],1),3),
+                          Th1.0/totalI,
+                          round((1+rel)/(1-rel),1),
+                          outcome)
+          i = i+1
+        }
+      }
+    }
+  }
+  mutate(results,
+         Th2bias=paste0("Th2=",Th2bias,"*Th1")) -> results
+  results$Th2bias = factor(results$Th2bias,
+                           levels=c("Th2=1*Th1",
+                                    "Th2=1.2*Th1",
+                                    "Th2=1.5*Th1",
+                                    "Th2=1.9*Th1", 
+                                    "Th2=2.3*Th1", 
+                                    "Th2=3*Th1"))
+  saveRDS(results, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,".RDS"))
+}
+
+
+```
+
+The obvious initial conditions to vary are the initial parasite dose and the initial balance between Th1 and Th2 responses, fixing the total initial immune abundance (so the abundance of Th2 is just the total minus the initial abundance of Th1).
+For any set of initial conditions and parameter values, however, there are four possible outcomes (equilibria that the system will reach):
+1. Th2 polarization and parasite extinction;
+2. High coactivation of both Th1 and Th2 - the parasite abundance when this happens is always low, and is frequently zero;
+3. Th1 polarization and a chronic parasite infection;
+4. Low coactivation of both Th1 and Th2 - the parasite abundance in this case is typically high.
+We might consider that equilibria 1 and 2 represent an acute infection, whereas equilibria 3 and 4 represent a chronic infection.
+
+When $\iota_{12}=\iota_{21}=20$, so that self-activation is 20x more sensitive to increases to T cell abundance than cross-inhibition, there are several notable results (Fig. 1).
+When the total immune abundance is initially low (top two rows), we see that the system tends to get "stuck" at the low coactivation equilibrium unless the parasite induces a strongly Th2-biased response (right two columns).
+On the other hand, if total immune abundance is initially high, then the immune-parasite interaction can become polarized towards Th2 (black), towards Th1 (red), or it can reach a high co-activation state that drives the parasite extinct (grey). 
+In these cases, for a given bias in Th2 activation by the parasite (relative to Th1 activation; across columns) and a given initial total T cell abundance (across rows), chronicity becomes more likely as the system becomes more initially Th1-biased (moving towards the right on the x-axis).
+Chronicity is also more likely for lower initial total immune abundances (top-most rows), or for more relatively equal parasite activation of Th2 and Th1 (left-most columns).
+All of these results make sense, intuitively, but their importance should not be underestimated.
+In particular, even when the parasite activates Th2 immunity more than twice as quickly as it activates Th1 immunity, it is still possible to end up with a chronic infection if the system starts with enough of a Th1 bias.
+
+```{r results20fig, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for $\\iota_{12}=\\iota_{21}=20$. Initial parasite dose varies along the y-axis of every panel. Initial Th1 bias varies along the x-axis of every panel. An initial Th1 bias of 0 means that all of the immune cells are Th2, whereas an initial Th1 bias of 1 means that all of the immune cells are Th1. Across rows, we vary the initial total number of immune cells, so the top row shows the outcomes when the immune system is initially very inactive, whereas the bottorm row shows the outcomes when the immune system is initially very active. Across columns, we vary the bias in the parasite's activation of Th2 immunity, so the left column shows the outcomes when the parasite stimulates Th1 and Th2 equally, whereas the right column shows the outcomes when the parasite stimulates Th2 immunity three times faster than Th1 immunity."}
+
+mutate(results20, 
+       Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1")) -> results20
+results20$Th2bias = factor(results20$Th2bias, levels=c("Th2=1*Th1","Th2=1.2*Th1","Th2=1.5*Th1","Th2=1.9*Th1", "Th2=2.3*Th1", "Th2=3*Th1"))
+mybreaks = results20$outcome %>% unique %>% sort
+mycolors = c("black","darkgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2 (extinct)", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results20,aes(Th1bias,initP,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initT~Th2bias) + 
+  xlab("Initial Th1 bias") + ylab("Initial parasite") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+When $\iota_{12}=\iota_{21}=10$, so that self-activation is 10x more sensitive to increases to T cell abundance than cross-inhibition (Fig. 2), new possibilities are revealed.
+In particular, the immune-parasite interactions are more likely to lead to incorrect Th1 polarization (compare far right columns of Fig. 1 and 2).
+There are also two dynamically distinct high co-activation equilibria. 
+For slightly less biased Th2 activation by the parasite (left columns), the parasite is often driven extinct at a high immune co-activation equilibrium.
+Surprisingly, if the parasite leads to very strong activation of Th2 relative to Th1 (right columns), the region of high immune co-activation actually represents the system approaching an unstable equilibrium where the parasite and immune system cycle around a very low parasite abundance equilibrium.
+
+```{r results10fig, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for $\\iota_{12}=\\iota_{21}=10$. Initial parasite dose varies along the y-axis of every panel. Initial Th1 bias varies along the x-axis of every panel. An initial Th1 bias of 0 means that all of the immune cells are Th2, whereas an initial Th1 bias of 1 means that all of the immune cells are Th1. Across rows, we vary the initial total number of immune cells, so the top row shows the outcomes when the immune system is initially very inactive, whereas the bottorm row shows the outcomes when the immune system is initially very active. Across columns, we vary the bias in the parasite's activation of Th2 immunity, so the left column shows the outcomes when the parasite stimulates Th1 and Th2 equally, whereas the right column shows the outcomes when the parasite stimulates Th2 immunity three times faster than Th1 immunity."}
+mutate(results10, 
+       Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1")) -> results10
+results10$Th2bias = factor(results10$Th2bias,
+                           levels=c("Th2=1*Th1","Th2=1.2*Th1","Th2=1.5*Th1","Th2=1.9*Th1", "Th2=2.3*Th1", "Th2=3*Th1"))
+mybreaks = results10$outcome %>% unique %>% sort
+mycolors = c("black","darkgrey","red","blue","beige","purple")
+mylabels = c("High Th2","High Th1+2 (extinct)", "High Th1", "Low Th1+2","Saddle","Cycling")
+ggplot(results10,aes(Th1bias,initP,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,7)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initT~Th2bias) + 
+  xlab("Initial Th1 bias") + ylab("Initial parasite") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+When $\iota_{12}=\iota_{21}=5$, so that self-activation is 5x more sensitive to increases to T cell abundance than cross-inhibition (Fig. 3), we mostly lose the high coactivation equilibrium (it exists, but only for perfectly balanced immune activation [left column] and for nearly perfectly balanced Th1:Th2 [initial Th1 bias of 0.5] - notice the nearly invisible grey line).
+Th1 polarization is still possible, even for threefold higher Th2 activation.
+
+```{r results5fig, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for $\\iota_{12}=\\iota_{21}=5$. Initial parasite dose varies along the y-axis of every panel. Initial Th1 bias varies along the x-axis of every panel. An initial Th1 bias of 0 means that all of the immune cells are Th2, whereas an initial Th1 bias of 1 means that all of the immune cells are Th1. Across rows, we vary the initial total number of immune cells, so the top row shows the outcomes when the immune system is initially very inactive, whereas the bottorm row shows the outcomes when the immune system is initially very active. Across columns, we vary the bias in the parasite's activation of Th2 immunity, so the left column shows the outcomes when the parasite stimulates Th1 and Th2 equally, whereas the right column shows the outcomes when the parasite stimulates Th2 immunity three times faster than Th1 immunity."}
+results5 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=5.RDS")
+mutate(results5, 
+       Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1")) -> results5
+results5$Th2bias = factor(results5$Th2bias, 
+                          levels=c("Th2=1*Th1","Th2=1.2*Th1","Th2=1.5*Th1","Th2=1.9*Th1", "Th2=2.3*Th1", "Th2=3*Th1"))
+mybreaks = results5$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2 (coexist)", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results5,aes(Th1bias,initP,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initT~Th2bias) + 
+  xlab("Initial Th1 bias") + ylab("Initial parasite") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+When $\iota_{12}=\iota_{21}=1$, so that self-activation is equally sensitive to increases in T cell abundance as cross-inhibition (Fig. 4), we see that the low coactivation equilibrium is very likely to be reached when the initial Th1 and Th2 abundances are very similar.
+Biologically this implies that the parasite reaches a high biomass because the immune response is never engaged enough to overcome the cross-inhibition.
+However, at high parasite activation of the Th2 response, it is always excluded.
+
+```{r results1fig, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for $\\iota_{12}=\\iota_{21}=1$. Initial parasite dose varies along the y-axis of every panel. Initial Th1 bias varies along the x-axis of every panel. An initial Th1 bias of 0 means that all of the immune cells are Th2, whereas an initial Th1 bias of 1 means that all of the immune cells are Th1. Across rows, we vary the initial total number of immune cells, so the top row shows the outcomes when the immune system is initially very inactive, whereas the bottorm row shows the outcomes when the immune system is initially very active. Across columns, we vary the bias in the parasite's activation of Th2 immunity, so the left column shows the outcomes when the parasite stimulates Th1 and Th2 equally, whereas the right column shows the outcomes when the parasite stimulates Th2 immunity three times faster than Th1 immunity."}
+results1 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=1.RDS")
+mutate(results1, 
+       Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1")) -> results1
+results1$Th2bias = factor(results1$Th2bias, levels=c("Th2=1*Th1","Th2=1.2*Th1","Th2=1.5*Th1","Th2=1.9*Th1", "Th2=2.3*Th1", "Th2=3*Th1"))
+mybreaks = results1$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results1,aes(Th1bias,initP,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initT~Th2bias) + 
+  xlab("Initial Th1 bias") + ylab("Initial parasite") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+When $\iota_{12}=\iota_{21}=0.5$, so that cross-inhibition is 2x more sensitive to increases in T cell abundance than self-activation (Fig. 5), we see that the low coactivation equilibrium is very likely to be reached across all initial conditions, implying that increasing cross-inhibition will tend to strongly stabilize the immune response remaining shut down.
+Th1 polarization is only possible if the parasite stimulates Th1 and Th2 immunity equally (far left column).
+
+```{r results05fig, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for $\\iota_{12}=\\iota_{21}=0.5$. Initial parasite dose varies along the y-axis of every panel. Initial Th1 bias varies along the x-axis of every panel. An initial Th1 bias of 0 means that all of the immune cells are Th2, whereas an initial Th1 bias of 1 means that all of the immune cells are Th1. Across rows, we vary the initial total number of immune cells, so the top row shows the outcomes when the immune system is initially very inactive, whereas the bottorm row shows the outcomes when the immune system is initially very active. Across columns, we vary the bias in the parasite's activation of Th2 immunity, so the left column shows the outcomes when the parasite stimulates Th1 and Th2 equally, whereas the right column shows the outcomes when the parasite stimulates Th2 immunity three times faster than Th1 immunity."}
+mutate(results05, 
+       Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1")) -> results05
+results05$Th2bias = factor(results05$Th2bias, levels=c("Th2=1*Th1","Th2=1.2*Th1","Th2=1.5*Th1","Th2=1.9*Th1", "Th2=2.3*Th1", "Th2=3*Th1"))
+mybreaks = results05$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results05,aes(Th1bias,initP,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initT~Th2bias) + 
+  xlab("Initial Th1 bias") + ylab("Initial parasite") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+```{r, echo=FALSE, eval=FALSE}
+for (iij in c(20,10,5,1,0.5)) {
+  results = data.frame(initT=rep(NA,6*201*201*4),
+                       initTh1=rep(NA,6*201*201*4),
+                       initP=rep(NA,6*201*201*4),
+                       t=rep(NA,6*201*201*4),
+                       Th1=rep(NA,6*201*201*4),
+                       Th2=rep(NA,6*201*201*4),
+                       P=rep(NA,6*201*201*4),
+                       Th1bias=rep(NA,6*201*201*4),
+                       Th2bias=rep(NA,6*201*201*4),
+                       outcome=rep(NA,6*201*201*4))
+  i = 1
+  for (rel in seq(0,0.5,0.1)) {
+    print(rel)
+    for (totalI in seq(0.2,2,1.8/200)) {
+      print(totalI)
+      for (Th1.0 in seq(0,totalI,totalI/200)) {
+        for (P.0 in c(0.05,0.1,0.15,0.2)) {
+          params = c(b1=0.000111111, b2=.000111111, 
+                     s1=2.22222, s2=2.22222, 
+                     i12=iij, i21=iij, 
+                     k1=1/6, k2=1/6, 
+                     c1=(1-rel)*0.111111, c2=(1+rel)*0.111111, 
+                     r=3.33333, a=3.33333)
+          y0 = c(Th1=Th1.0, Th2=totalI-Th1.0, P=P.0)
+          times = seq(0,100)
+          out = ode(y0, times, func="derivs", parms=params, dllname="dimensionless_model", initfunc="initmod", atol=1e-14, rtol=1e-14)
+          
+          while((abs(diff(tail(out[,2],2))) > 1e-12 | abs(diff(tail(out[,3],2))) > 1e-12 | abs(diff(tail(out[,4],2))) > 1e-12) & tail(out[,1],1) < 5000) {
+            #print(paste("more simulation required for", rel,totalI,Th1.0,P.0))
+            times = seq(tail(out[,1],1),tail(out[,1],1)+100,1)
+            y0 = tail(out[,2:4],1)
+            out = ode(y0, times, func="derivs", parms=params, dllname="dimensionless_model", initfunc="initmod", atol=1e-14, rtol=1e-14)
+            if (out[101,4] < 0) {
+              #print("generating negative values"); print(rel); print(iij); print(y0); 
+              out[101,4] = 0} # catch negatives
+          }
+          ## Classify the equilibrium reached (so long as the final t < 5000)
+          if (tail(out[,1],1) < 5000) {
+            ## Calculate the stability of the equilibrium
+            equilStab = eigen(jacobian.full(y=as.numeric(tail(out[,2:4],1)),
+                                            func=dimensionless_modelJ, 
+                                            parms=params))$values
+            if (all(Re(equilStab) < 0)) {## this equilibrium is stable, classify it
+              if (tail(out[,"Th1"],1) < 0.1 & tail(out[,"Th2"],1) > 1 & tail(out[,"P"],1) < 1e-9)
+                outcome = 1 ## Th2 polarization
+              else if (tail(out[,"Th1"],1) > 0.8 & tail(out[,"Th2"],1) > 0.8 & tail(out[,"P"],1) < 0.2)
+                outcome = 2 ## High Th1+Th2
+              else if (tail(out[,"Th1"],1) > 0.9 & tail(out[,"Th2"],1) < 0.3 & tail(out[,"P"],1) > 0.6)
+                outcome = 3 ## Th1 polarization
+              else outcome = 4 ## Low Th1+Th2
+            } else outcome = 5 ## Saddle
+          } else outcome = 6 ## Cycling
+          results[i,] <- c(totalI,
+                          Th1.0,
+                          P.0,
+                          tail(out[,"time"],1),
+                          round(tail(out[,"Th1"],1),3),
+                          round(tail(out[,"Th2"],1),3),
+                          round(tail(out[,"P"],1),3),
+                          Th1.0/totalI,
+                          round((1+rel)/(1-rel),1),
+                          outcome)
+          i = i+1
+        }
+      }
+    }
+  }
+  mutate(results,
+         Th2bias=paste0("Th2=",Th2bias,"*Th1")) -> results
+  results$Th2bias = factor(results$Th2bias,
+                           levels=c("Th2=1*Th1",
+                                    "Th2=1.2*Th1",
+                                    "Th2=1.5*Th1",
+                                    "Th2=1.9*Th1", 
+                                    "Th2=2.3*Th1", 
+                                    "Th2=3*Th1"))
+  saveRDS(results, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_fixed_P0.RDS"))
+}
+
+```
+
+```{r, echo=FALSE, eval=FALSE}
+for (iij in c(20,10,5,1,0.5)) {
+  print(iij)
+  results = readRDS(paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_fixed_P0.RDS"))
+  ## For some reason, these are recording in such a way that they create issues later
+  mutate(results,
+         Th1=round(Th1,3),
+         Th2=round(Th2,3),
+         Th1bias = rep(rep(rep(seq(0,1,0.005),each=4),201),6),
+         initT = rep(rep(seq(0.2,2,1.8/200),each=804),6),
+         Th2bias=paste0("Th2=",round((1+Th2activation)/(1-Th2activation),1),"*Th1"),
+         iij=iij) -> results
+  
+  
+    print(any(results$outcome==0))
+  
+  ## Save
+  saveRDS(results, file=paste0("Dimensionless_model_results_across_parameters_initials_iij=",iij,"_fixed_P0.RDS"))
+}
+```
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=20$."}
+results20 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=20_fixed_P0.RDS")
+
+mybreaks = results20$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue","white","purple")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2", "Saddle", "Cycling")[mybreaks]
+ggplot(results20,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,max(mybreaks+1))) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+```
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=10$."}
+results10 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=10_fixed_P0.RDS")
+
+mybreaks = results10$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue","white","purple")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2", "Saddle", "Cycling")[mybreaks]
+ggplot(results10,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,max(mybreaks+1))) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+```
+
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=5$."}
+
+results5 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=5_fixed_P0.RDS")
+
+mybreaks = results5$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results5,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+```
+
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=1$."}
+results1 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=1_fixed_P0.RDS")
+
+mybreaks = results1$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2")[mybreaks]
+ggplot(results1,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,5)) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+```
+
+
+```{r, echo=FALSE, fig.height=8, fig.width=10, fig.fullwidth=TRUE, fig.cap="Mapping which equilibria are reached for variation in the initial Th1 bias (x-axis), initial total immune cells (y-axis), across variation in immune activation by the parasite (columns) and initial parasite dose (rows). For this figure, $\\iota_{12}=\\iota_{21}=0.5$."}
+results05 = readRDS("Dimensionless_model_results_across_parameters_initials_iij=0.5_fixed_P0.RDS")
+
+mybreaks = results05$outcome %>% unique %>% sort
+mycolors = c("black","lightgrey","red","blue","white","purple")[mybreaks]
+mylabels = c("High Th2","High Th1+2", "High Th1", "Low Th1+2", "Saddle", "Cycling")[mybreaks]
+ggplot(results05,aes(Th1bias,initT,z=outcome)) + 
+  geom_contour_filled(breaks=c(mybreaks,max(mybreaks+1))) + 
+  scale_fill_discrete(type=mycolors, name="", labels=mylabels) + 
+  facet_grid(initP~Th2activation) + 
+  xlab("Initial Th1 bias") + ylab("Initial Th1 + Th2") + 
+  theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+```
