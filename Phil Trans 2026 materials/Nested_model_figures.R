@@ -5,6 +5,12 @@ library(patchwork)
 library(tidyverse)
 library(magrittr)
 library(deSolve)
+
+#########################################################################################
+#########################################################################################
+#########################################################################################
+## Generate data for creating figures
+
 sourceCpp("nested_model_vary_Th2.cpp")
 
 for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
@@ -74,51 +80,6 @@ within_host_model_det = function(t, y, params) {
   list(c(dT1, dT2, dP))
 }
 
-## A cool example showing how the high Th1, high Th2, low P deterministic equilibrium disappears with stochasticity
-## Very nice extension of previous work!
-th2 = 517; p = 40
-parms=c(S1=1000, S2=1000, s1=2000, s2=2000,
-        b1=0.1, b2=0.1, I12=10000, I21=10000,
-        m=0.9, c1=50, c2=130, C1=50, C2=50,
-        bp=8, Kp=300, a=0.004, v=1e-4, v0=1e-4)
-x0 = c(T1=1200-th2, T2=th2, P=p)
-ode(y=x0, 
-    times=seq(0,200,0.1), 
-    func=within_host_model_det, 
-    parms=parms) -> out_det
-plot(out_det)
-
-sourceCpp("within-host_model.cpp")
-parms=c(S1=1000, S2=1000, s1=2000, s2=2000,
-        b1=0.1, b2=0.1, I12=10000, I21=10000,
-        m=0.9, c1=50, c2=130, C1=50, C2=50,
-        bp=8, Kp=300, a=0.004, v=1e-4, v0=1e-4,
-        tmax=200, T1=1200-th2, T2=th2, P=p)
-lapply(1:100, function(i) within_host_model(parms)) -> out_stoch
-
-par(mfrow=c(2,2), mar=c(2,4,0,0), oma=c(2,0.5,0.5,0.5))
-plot(out_det[,c(1,2)], type='l', ylim=c(0,1800), xlab="", ylab="")
-for (i in 1:100) lines(out_stoch[[i]][,c(1,2)], col="gray")
-lines(out_det[,c(1,2)], lwd=2)
-mtext("Th1", side=2, line=2.5)
-
-plot(out_det[,c(1,3)], type='l', ylim=c(0,1800), xlab="", ylab="")
-for (i in 1:100) lines(out_stoch[[i]][,c(1,3)], col="gray")
-lines(out_det[,c(1,3)], lwd=2)
-mtext("Th2", side=2, line=2.5)
-
-plot(out_det[,c(1,4)], type='l', ylim=c(0,260), xlab="", ylab="")
-for (i in 1:100) lines(out_stoch[[i]][,c(1,4)], col="gray")
-lines(out_det[,c(1,4)], lwd=2)
-mtext("P", side=2, line=2.5)
-mtext("Time", side=1, outer=T, line=1)
-legend(x='bottomright', legend=paste0("Pr(clearance)=",sum((lapply(out_stoch, function(o) o[201,4]) %>% unlist)==0)/100), text.col='red', bty='n', adj=c(0,-1))
-
-#########################################################################################
-#########################################################################################
-#########################################################################################
-
-## Figure 1: within-host dynamics at baseline parameter values
 th2_seq = seq(200,800)
 p_seq = seq(1,40)
 init_cond_list = split(expand.grid(Th2=th2_seq, P=p_seq), seq(length(th2_seq)*length(p_seq)))
@@ -154,10 +115,16 @@ for (i in 1:length(init_cond_list)) {
   print(i)
   mclapply(1:100, 
            function(j) within_host_model(init_cond_list[[i]])[201,2:4],
-         mc.cores=14) %>%
+           mc.cores=14) %>%
     do.call("rbind",.) -> stoch_grid[[i]]
 }
 saveRDS(stoch_grid, file="Stochastic_within-host_outcomes_4-16.RDS")
+
+#########################################################################################
+#########################################################################################
+#########################################################################################
+
+## Figure 1: within-host dynamics at baseline parameter values
 
 det_grid = readRDS(file="Deterministic_within-host_outcomes_4-16.RDS")
 th2_seq = seq(200,800)
@@ -224,47 +191,6 @@ stoch_outcomes %>%
 png(file="Fig1_Phil_Trans.png", width=5, height=7, units='in', res=400)
 p1 / p2
 dev.off()
-
-
-
-
-#########################################################################################
-#########################################################################################
-#########################################################################################
-
-
-
-## Range of initial parasite densities in simulations
-P0 <- vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
-iii = 1
-for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
-  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
-  P0[[iii]] = unlist(lapply(out2[[1]][[1]], function(o) max(o[,7])))
-  iii = iii+1
-}
-max(unlist(P0)) ## 45 is largest dose any individual ever received; the median is 30
-
-## Appendix figure showing the epidmiological dynamics for every min Th2 value
-png(file="Epidemiological_dynamics_as_min_Th2_varies_4-9.png", height=9, width=9,  units='in', res=300)
-par(mfrow=c(5,3), mar=c(3.5,3.5,0.5,0.5), oma=rep(0,4))
-for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
-  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
-  ## Y axis limits
-  plot.new()
-  plot.window(xlim=c(0,max(out2[[1]][[2]][,1])), ylim=c(0,110))
-  axis(1); axis(2); box('plot')
-  nextinct=0
-  for (i in 1:50) {
-    lines(out2[[i]][[2]][,c(1,3)], col=ifelse(as.numeric(tail(out2[[i]][[2]],1)[,3])>0,1,2))
-    nextinct = nextinct + ifelse(as.numeric(tail(out2[[i]][[2]],1)[,3])>0,0,1)
-  }
-  mtext(side=1, line=2.5, "Time")
-  mtext(side=2, line=2.5, "No. infected")
-  legend(x='topleft', legend=paste0("Init Th2=",th2,"-",800), bty='n', text.col='blue')
-  legend(x='bottomright', legend=paste0("Prob(fadeout)=",nextinct/50), bty='n', text.col='red')
-}
-dev.off()
-
 
 #########################################################################################
 #########################################################################################
@@ -587,7 +513,37 @@ final_plot
 dev.off()
 
 
-#########################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+
+## Figure 5
+
+ESS5 = read.csv("Fig5_ESS_5.csv")
+ESS10 = read.csv("Fig5_ESS_10.csv")
+ESS20 = read.csv("Fig5_ESS_20.csv")
+ESSb = read.csv("Fig5_ESS_baseline.csv")
+
+png(filename="Fig5_ESS_result_Phil_Trans.png", height=4, width=6, units='in', res=400)
+par(mfrow=c(1,2), mar=c(4,2,0.5,0.5), oma=c(0,2,0,0))
+plot(ESS5, xlab=expression("Recovery probability"~italic(p)), ylab="", type='l', lwd=2, xlim=c(0.6,1), col="#0072B2")
+lines(ESS10, lwd=2, col= "#009E73")
+lines(ESS20, lwd=2, col="#E69F00")
+mtext("ESS virulence", side=2, line=1, outer=T)
+legend(x=0.6, y=0.01, xjust=0.15, yjust=0.5, fill=c("#0072B2","#009E73","#E69F00"), legend=c(expression(gamma==0.2),expression(gamma==0.1),expression(gamma==0.05)), bty='n')
+legend(x=0.6, y=0.044, xjust=0.5, yjust=0.5, legend="A", bty="n")
+
+plot(ESSb, xlab=expression("Recovery rate"~gamma), ylab="", type='l', lwd=2, col=1)
+legend(x=0, y=0.044, legend="B", xjust=0.5, yjust=0.5, bty='n')
+dev.off()
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+## Supplementary Figure S1
 
 out2 <- readRDS(file="Nested_model_variable_dose_min_Th2=575_5-11.RDS")
 lapply(1:length(out2), 
@@ -621,28 +577,4 @@ ggplot(filter(o575, color==1), aes(x=time, y=v, group=ind, color=as.factor(color
 
 png(file="FigS1_Extended_timestep_runs.png", width=5, height=3, units='in', res=400)
 p1 + p2
-dev.off()
-
-###############################################################################
-###############################################################################
-###############################################################################
-
-## Figure 5
-
-ESS5 = read.csv("Fig5_ESS_5.csv")
-ESS10 = read.csv("Fig5_ESS_10.csv")
-ESS20 = read.csv("Fig5_ESS_20.csv")
-ESSb = read.csv("Fig5_ESS_baseline.csv")
-
-png(filename="Fig5_ESS_result_Phil_Trans.png", height=4, width=6, units='in', res=400)
-par(mfrow=c(1,2), mar=c(4,2,0.5,0.5), oma=c(0,2,0,0))
-plot(ESS5, xlab=expression("Recovery probability"~italic(p)), ylab="", type='l', lwd=2, xlim=c(0.6,1), col="#0072B2")
-lines(ESS10, lwd=2, col= "#009E73")
-lines(ESS20, lwd=2, col="#E69F00")
-mtext("ESS virulence", side=2, line=1, outer=T)
-legend(x=0.6, y=0.01, xjust=0.15, yjust=0.5, fill=c("#0072B2","#009E73","#E69F00"), legend=c(expression(gamma==0.2),expression(gamma==0.1),expression(gamma==0.05)), bty='n')
-legend(x=0.6, y=0.044, xjust=0.5, yjust=0.5, legend="A", bty="n")
-
-plot(ESSb, xlab=expression("Recovery rate"~gamma), ylab="", type='l', lwd=2, col=1)
-legend(x=0, y=0.044, legend="B", xjust=0.5, yjust=0.5, bty='n')
 dev.off()
