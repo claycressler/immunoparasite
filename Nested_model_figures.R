@@ -522,6 +522,8 @@ for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
 }
 infection_peaks %<>% do.call("rbind",.)
 
+library(cmprsk)
+
 infection_clearance = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
 i = 1
 for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
@@ -552,12 +554,15 @@ dat %>%
   ggplot(., aes(x=tint, y=Values, group=minTh2, color=factor(minTh2))) + 
   geom_line() + 
   scale_color_manual(values = colorRampPalette(c("red", "blue"))(10)) +
-  facet_wrap(.~Component, scales="free", labeller=labeller(Component = c("mean_duration"="B. Infection duration", "mean_peak"="C. Peak burden", "mean_prob"="A. Clearance probability"))) + 
+  facet_wrap(.~Component, scales="free", labeller=labeller(Component = c("mean_duration"="B. Infection duration", "mean_peak"="C. Peak biomass", "mean_prob"="A. Recovery probability"))) + 
   theme_bw() + 
   xlab("Infection start time") + 
   ylab("Fitness component") + 
   labs(color=NULL) + 
   theme(legend.position="bottom") -> p_base
+
+library(cowplot)
+
 leg <- get_legend(p_base)
 
 legend_row <- plot_grid(
@@ -592,6 +597,8 @@ lapply(1:length(out2),
                               color=ifelse(any(out2[[i]][[2]][,3]==0),0,1),
                               ind=i)) %>%
   do.call("rbind.data.frame",.) -> o575
+
+library(patchwork)
 
 ggplot(o575, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) + 
   geom_line() + 
@@ -629,13 +636,13 @@ ESSb = read.csv("Fig5_ESS_baseline.csv")
 
 png(filename="Fig5_ESS_result_Phil_Trans.png", height=4, width=6, units='in', res=400)
 par(mfrow=c(1,2), mar=c(4,2,0.5,0.5), oma=c(0,2,0,0))
-plot(ESS5, xlab=expression("Clearance probability"~italic(p)), ylab="", type='l', lwd=2, xlim=c(0.6,1), col="#0072B2")
+plot(ESS5, xlab=expression("Recovery probability"~italic(p)), ylab="", type='l', lwd=2, xlim=c(0.6,1), col="#0072B2")
 lines(ESS10, lwd=2, col= "#009E73")
 lines(ESS20, lwd=2, col="#E69F00")
 mtext("ESS virulence", side=2, line=1, outer=T)
 legend(x=0.6, y=0.01, xjust=0.15, yjust=0.5, fill=c("#0072B2","#009E73","#E69F00"), legend=c(expression(gamma==0.2),expression(gamma==0.1),expression(gamma==0.05)), bty='n')
 legend(x=0.6, y=0.044, xjust=0.5, yjust=0.5, legend="A", bty="n")
 
-plot(ESSb, xlab=expression("Clearance rate"~gamma), ylab="", type='l', lwd=2, col=1)
+plot(ESSb, xlab=expression("Recovery rate"~gamma), ylab="", type='l', lwd=2, col=1)
 legend(x=0, y=0.044, legend="B", xjust=0.5, yjust=0.5, bty='n')
 dev.off()
