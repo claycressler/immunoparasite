@@ -198,22 +198,27 @@ dev.off()
 
 ## Figure 2
 
-prev = viru = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
+prev = viru = fatal = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
 iii = 1
 for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
   out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
-  prev[[iii]] = data.frame(prev=unlist(lapply(out2, function(o) tail(o[[2]][,3],1)))/100, th2=th2)
-  viru[[iii]] = data.frame(prev=unlist(lapply(out2, function(o) tail(o[[2]][,6],1)))/100, th2=th2)
+  ## Compute the infection prevalence at the final time point
+  prev[[iii]] = data.frame(prev=unlist(lapply(out2, function(o) tail(o[[2]][,3],1)/(tail(o[[2]][,2],1)+tail(o[[2]][,3],1)))), th2=th2)
+  ## Compute the average virulence at the final time point
+  viru[[iii]] = data.frame(viru=unlist(lapply(out2, function(o) tail(o[[2]][,6],1))), th2=th2)
+  ## Compute the case fatality rate at the final time point
+  fatal[[iii]] = data.frame(fatal=unlist(lapply(out2, function(o) tail(o[[2]][,5],1)/(tail(o[[2]][,4],1)+tail(o[[2]][,5],1)))), th2=th2)
   iii = iii+1
 }
 prev %<>% do.call("rbind.data.frame",.)
 viru %<>% do.call("rbind.data.frame",.)
+fatal %<>% do.call("rbind.data.frame",.)
 
 th2 = 200
 out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
 lapply(1:length(out2), 
        function(i) data.frame(time= out2[[i]][[2]][,1], 
-                              infecteds=out2[[i]][[2]][,3]/100, 
+                              infecteds=out2[[i]][[2]][,3]/(out2[[i]][[2]][,2]+out2[[i]][[2]][,3]), 
                               v=out2[[i]][[2]][,6],
                               color=ifelse(any(out2[[i]][[2]][,3]==0),0,1),
                               ind=i)) %>%
@@ -223,7 +228,7 @@ th2 = 575
 out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
 lapply(1:length(out2), 
        function(i) data.frame(time= out2[[i]][[2]][,1], 
-                              infecteds=out2[[i]][[2]][,3]/100, 
+                              infecteds=out2[[i]][[2]][,3]/(out2[[i]][[2]][,2]+out2[[i]][[2]][,3]), 
                               v=out2[[i]][[2]][,6], 
                               color=ifelse(any(out2[[i]][[2]][,3]==0),0,1),
                               ind=i)) %>%
@@ -233,7 +238,7 @@ th2 = 700
 out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
 lapply(1:length(out2), 
        function(i) data.frame(time= out2[[i]][[2]][,1], 
-                              infecteds=out2[[i]][[2]][,3]/100, 
+                              infecteds=out2[[i]][[2]][,3]/(out2[[i]][[2]][,2]+out2[[i]][[2]][,3]), 
                               v=out2[[i]][[2]][,6], 
                               color=ifelse(any(out2[[i]][[2]][,3]==0),0,1),
                               ind=i)) %>%
@@ -254,10 +259,10 @@ ggplot(o200, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) +
 ggplot(o575, aes(x=time, y=infecteds, group=ind, color=as.factor(color))) + 
   geom_line() + 
   scale_color_manual(values=c("0"="red", "1"="gray")) + 
-  geom_line(aes(x=time, y=meanI), linewidth=1, color="#E69F00", data=(o550 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanI=mean(infecteds))), inherit.aes=FALSE) + 
+  geom_line(aes(x=time, y=meanI), linewidth=1, color="#E69F00", data=(o575 %>% filter(infecteds > 0) %>% group_by(time) %>% summarize(meanI=mean(infecteds))), inherit.aes=FALSE) + 
   xlab("Time") + ylab("Prevalence") + ylim(0,1) + 
   annotate("text", x=-Inf, y=Inf, label="Min Th2=575", hjust=-0.25, vjust=2, color="#E69F00", size=2.75) +
-  annotate("text", x=Inf, y=-Inf, label=paste0("P(fadeout)=",1-sum(filter(o550, time==max(time))$color)/50), hjust=1.25, vjust=-1.5, color="red", size=2.75) +
+  annotate("text", x=Inf, y=-Inf, label=paste0("P(fadeout)=",1-sum(filter(o575, time==max(time))$color)/50), hjust=1.25, vjust=-1.5, color="red", size=2.75) +
   theme_bw() + 
   theme(legend.position="none")  -> p2
 
@@ -285,7 +290,7 @@ ggplot(prev, aes(x=th2, y=prev, color=color)) +
   ylab("Prevalence at final time") -> p4.1
 
 
-png(file="Fig2_Epidemiological_dynamics_Phil_Trans.png", width=8, height=6, units='in', res=400)
+png(file="Fig2_Epidemiological_dynamics_Phil_Trans_revision.png", width=8, height=6, units='in', res=400)
 left = p1 / p2 / p3
 left | p4.1
 dev.off()
@@ -329,7 +334,7 @@ viru$color[which(viru$th2==200)] = "#0072B2"
 viru$color[which(viru$th2==575)] = "#E69F00"
 viru$color[which(viru$th2==700)] = "#009E73"
 
-ggplot(filter(viru, prev > 0), aes(x=th2, y=prev, color=color)) + 
+ggplot(filter(viru, viru > 0), aes(x=th2, y=viru, color=color)) + 
   geom_point() + 
   scale_color_manual(values=c("black"="black", "#0072B2"="#0072B2", "#E69F00"="#E69F00", "#009E73"="#009E73")) + 
   theme_bw() + 
@@ -338,10 +343,44 @@ ggplot(filter(viru, prev > 0), aes(x=th2, y=prev, color=color)) +
   ylab("Virulence at final time") -> p4.1
 
 
-png(file="Fig3_Evolutionary_dynamics_Phil_Trans.png", width=8, height=6, units='in', res=400)
+png(file="Fig3_Evolutionary_dynamics_Phil_Trans_revision.png", width=8, height=6, units='in', res=400)
 left = p1 / p2 / p3
 left | p4.1
 dev.off()
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+png("Case_fatality.png", height=5, width=5, units='in', res=450)
+ggplot(fatal, aes(x=th2, y=fatal)) + 
+  geom_point() + 
+  theme_bw() + 
+  theme(legend.position='none') +
+  xlab("Minimum Th2") + 
+  ylab("Case fatality at final time")
+dev.off()
+
+mort = vector(mode='list', length=length(c(seq(200,500,50),seq(525,600,25),seq(650,750,50))))
+iii = 1
+for (th2 in c(seq(200,500,50),seq(525,600,25),seq(650,750,50))) {
+  out2 <- readRDS(file=paste0("Nested_model_variable_dose_min_Th2=",th2,"_4-9.RDS"))
+  ## Compute the the mortality rate
+  mort[[iii]] = data.frame(mort=unlist(lapply(out2, function(o) (o[[2]][,5] %>% tail() %>% diff() %>% sum())/6)), th2=th2)
+  iii = iii+1
+}
+mort %<>% do.call("rbind.data.frame",.)
+
+png("Mortality_rate.png", height=5, width=5, units='in', res=450)
+ggplot(filter(mort, mort > 0), aes(x=as.factor(th2), y=mort)) + 
+  geom_boxplot() + 
+  theme_bw() + 
+  theme(legend.position='none') +
+  xlab("Minimum Th2") + 
+  ylab("Mortality rate at final time")
+dev.off()
+
+
 
 ###############################################################################
 ###############################################################################
